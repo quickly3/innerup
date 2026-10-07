@@ -28,9 +28,13 @@ model User {
   goals        Goal[]
   checkIns     CheckIn[]
   achievements Achievement[]
+  focuses      Focus[]
+  interests    Interest[]
+  inputItems   InputItem[]
+  knowledge    Knowledge[]
 }
 
-// 能力 / 兴趣，用于技能雷达图
+// 技能（能做到什么），用于技能雷达图；兴趣是另一类对象，见《项目规划》第 13 节
 model Skill {
   id     String  @id @default(cuid())
   userId String
@@ -38,8 +42,12 @@ model Skill {
   level  Int     @default(1)
   xp     Int     @default(0)
   color  String?
+  // 产出物：链接 / 文件 / 打卡 id。升级门槛挂在产出上，而不是打卡次数（第 13.3 节）
+  evidence        String[]    @default([])
+  lastPracticedAt DateTime?
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  knowledge Knowledge[]
 
   @@index([userId])
 }
@@ -70,6 +78,7 @@ model Quest {
   estMinutes  Int?
   order       Int       @default(0)
   status      String    @default("todo") // todo | doing | done
+  kind        String    @default("practice") // input 输入 | practice 练习 | output 产出（见《项目规划》第 13 节）
   dueDate     DateTime?
 
   goal     Goal      @relation(fields: [goalId], references: [id], onDelete: Cascade)
@@ -107,6 +116,88 @@ model Review {
   createdAt DateTime @default(now())
 
   checkIn CheckIn @relation(fields: [checkInId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────────────────────
+// 成长地图（《项目规划》第 13 节）：关注点 / 兴趣 / 输入 / 知识 / 技能
+// 五类对象是一条链：为什么在意 → 想不想做 → 看了什么 → 懂了什么 → 能做到什么
+// ─────────────────────────────────────────────
+
+// 关注点：当下的处境 / 动机 / 待解决的问题
+model Focus {
+  id        String    @id @default(cuid())
+  userId    String
+  title     String // 想转岗做数据
+  why       String? // 动机：现在的工作看不到成长
+  intensity Int       @default(3) // 1~5 在意程度
+  status    String    @default("active") // active | cooling | archived
+  reviewAt  DateTime? // 到期未动 → AI 询问是否降级
+  createdAt DateTime  @default(now())
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interests Interest[]
+
+  @@index([userId])
+}
+
+// 兴趣：想不想做（还不一定会）
+model Interest {
+  id        String   @id @default(cuid())
+  userId    String
+  focusId   String?
+  name      String // 弹吉他 / 数据分析
+  status    String   @default("curious") // curious | trying | ongoing | cool | dropped
+  triedWhat String? // 试过什么（试水任务记录）
+  color     String?
+  createdAt DateTime @default(now())
+
+  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  focus  Focus?      @relation(fields: [focusId], references: [id], onDelete: SetNull)
+  inputs InputItem[]
+
+  @@index([userId])
+  @@index([focusId])
+}
+
+// 输入：看过的素材（台账，不是笔记）
+model InputItem {
+  id         String   @id @default(cuid())
+  userId     String
+  interestId String?
+  title      String // 《数据分析实战》
+  kind       String // book | course | article | podcast | video
+  source     String? // 作者 / 链接
+  status     String   @default("queued") // queued | consuming | finished | dropped
+  progress   String? // 第 3 章 / 45%
+  minutes    Int      @default(0)
+  takeaway   String? // 一句话收获（消化出口之一）
+  createdAt  DateTime @default(now())
+
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interest  Interest?   @relation(fields: [interestId], references: [id], onDelete: SetNull)
+  knowledge Knowledge[]
+
+  @@index([userId])
+  @@index([interestId])
+}
+
+// 知识：能讲清的东西
+model Knowledge {
+  id            String    @id @default(cuid())
+  userId        String
+  sourceInputId String?
+  statement     String // 留存率要按同期群拆开看
+  topic         String? // 数据分析
+  confidence    Int       @default(3) // 1~5
+  lastCheckedAt DateTime?
+  createdAt     DateTime  @default(now())
+
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceInput InputItem? @relation(fields: [sourceInputId], references: [id], onDelete: SetNull)
+  skills      Skill[]
+
+  @@index([userId])
+  @@index([sourceInputId])
 }
 
 // 成就 / 徽章

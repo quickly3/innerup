@@ -27,6 +27,12 @@ export const routes: Routes = [
       import('./features/quests/quest-list').then((m) => m.QuestList),
   },
   {
+    path: 'map',
+    title: 'InnerUp · 档案',
+    loadComponent: () =>
+      import('./features/map/map').then((m) => m.MapPage),
+  },
+  {
     path: 'profile',
     title: 'InnerUp · 角色卡',
     loadComponent: () =>

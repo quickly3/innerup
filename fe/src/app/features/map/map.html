@@ -1,0 +1,322 @@
+<section class="map-page">
+  <header class="hero">
+    <p class="hero__eyebrow">M2.5 · 个人档案</p>
+    <h1 class="hero__title">把你自己讲清楚</h1>
+    <p class="hero__subtitle">
+      粘一段自我介绍 / 简历 / 最近在忙的事，或传一份 PDF，AI 会把它归类成
+      关注点 / 兴趣 / 输入 / 知识 / 技能五类对象。你只需要确认——这是 AI 生成任务线的全部依据。
+    </p>
+  </header>
+
+  <!-- ── 1. 录入区 ─────────────────────────────── -->
+  <mat-card appearance="outlined" class="panel">
+    <mat-card-header>
+      <mat-card-title>① 录入</mat-card-title>
+      <mat-card-subtitle>3 分钟内把自己「讲清楚」</mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      <div class="guide">
+        <span class="guide__hint">不知道写什么？点一个开始：</span>
+        <div class="guide__chips">
+          @for (question of guideQuestions; track question) {
+            <button mat-stroked-button type="button" class="guide__chip" (click)="fillGuideQuestion(question)">
+              {{ question }}
+            </button>
+          }
+        </div>
+      </div>
+
+      <mat-form-field appearance="outline" class="text-field">
+        <mat-label>把简历、自我介绍或最近在忙的事粘进来</mat-label>
+        <textarea
+          matInput
+          [rows]="7"
+          [value]="text()"
+          (input)="text.set(textarea.value)"
+          #textarea
+          placeholder="例如：我在做运营，最近想转数据分析，在读《数据分析实战》第 3 章，还会 SQL……"
+        ></textarea>
+      </mat-form-field>
+
+      <div class="pdf-row">
+        <input
+          #pdfInput
+          id="map-pdf-input"
+          type="file"
+          accept=".pdf,application/pdf"
+          class="pdf-row__input"
+          (change)="onPdfSelected($event)"
+        />
+        <button
+          mat-stroked-button
+          type="button"
+          class="pdf-row__pick"
+          (click)="pdfInput.click()"
+        >
+          <mat-icon fontSet="material-symbols-outlined">upload_file</mat-icon>
+          选择 PDF（≤10MB）
+        </button>
+
+        @if (pdfName(); as name) {
+          <span class="pdf-row__file">
+            <mat-icon fontSet="material-symbols-outlined">picture_as_pdf</mat-icon>
+            {{ name }}
+            @if (pdfChars(); as chars) {
+              <span class="pdf-row__chars">已抽取 {{ chars }} 字</span>
+            }
+            <button
+              mat-icon-button
+              type="button"
+              aria-label="移除 PDF"
+              (click)="clearPdf($event)"
+            >
+              <mat-icon fontSet="material-symbols-outlined">close</mat-icon>
+            </button>
+          </span>
+        }
+
+        <span class="pdf-row__spacer"></span>
+
+        <button
+          mat-flat-button
+          type="button"
+          class="ingest-button"
+          [disabled]="ingesting()"
+          (click)="ingest()"
+        >
+          @if (ingesting()) {
+            <mat-progress-spinner mode="indeterminate" [diameter]="18" />
+            AI 正在归类…
+          } @else {
+            <ng-container>
+              <mat-icon fontSet="material-symbols-outlined">auto_awesome</mat-icon>
+              让 AI 帮我归类
+            </ng-container>
+          }
+        </button>
+      </div>
+
+      @if (ingestError(); as message) {
+        <p class="notice notice--error">
+          <mat-icon fontSet="material-symbols-outlined">error</mat-icon>
+          <span>{{ message }}</span>
+        </p>
+      }
+      @if (emptyResult()) {
+        <p class="notice notice--muted">
+          <mat-icon fontSet="material-symbols-outlined">search_off</mat-icon>
+          <span>{{ emptyResultHint }}</span>
+        </p>
+      }
+    </mat-card-content>
+  </mat-card>
+
+  <!-- ── 2. 待确认区 ───────────────────────────── -->
+  @if (candidates().length > 0) {
+    <mat-card appearance="outlined" class="panel">
+      <mat-card-header>
+        <mat-card-title>② AI 归类结果（待确认）</mat-card-title>
+        <mat-card-subtitle>
+          改 / 删 / 换类都行；低把握的条目 AI 已标出来。选中的 {{ selectedCount() }} 条将落库
+        </mat-card-subtitle>
+      </mat-card-header>
+
+      <mat-card-content>
+        <ul class="candidate-list">
+          @for (row of candidates(); track row) {
+            <li class="candidate" [class.candidate--low]="row.confidence <= 2">
+              <mat-checkbox
+                [checked]="row.selected"
+                (change)="toggleRow(row, $event.checked)"
+              />
+
+              <div class="candidate__body">
+                <div class="candidate__head">
+                  <mat-form-field appearance="outline" class="candidate__kind" subscriptSizing="dynamic">
+                    <mat-select [value]="row.moveTo ?? row.kind" (selectionChange)="moveRow(row, $event.value)">
+                      @for (kind of allKinds; track kind) {
+                        <mat-option [value]="kind">{{ kindLabels[kind] }}</mat-option>
+                      }
+                    </mat-select>
+                  </mat-form-field>
+
+                  <input
+                    class="candidate__label"
+                    [value]="row.label"
+                    (change)="renameRow(row, anyInput.value)"
+                    #anyInput
+                  />
+                </div>
+
+                @if (row.detail) {
+                  <p class="candidate__detail">{{ row.detail }}</p>
+                }
+                @if (row.reason) {
+                  <p class="candidate__reason">依据：{{ row.reason }}</p>
+                }
+              </div>
+
+              <div class="candidate__side">
+                <span
+                  class="confidence"
+                  [class.confidence--low]="row.confidence <= 2"
+                  [class.confidence--mid]="row.confidence === 3"
+                >
+                  @if (row.confidence <= 2) {
+                    AI 不太确定
+                  } @else {
+                    把握 {{ row.confidence }}/5
+                  }
+                </span>
+                <button
+                  mat-icon-button
+                  type="button"
+                  aria-label="不要这条"
+                  (click)="removeRow(row)"
+                >
+                  <mat-icon fontSet="material-symbols-outlined">delete</mat-icon>
+                </button>
+              </div>
+            </li>
+          }
+        </ul>
+      </mat-card-content>
+
+      <mat-card-actions class="candidate-actions">
+        <button
+          mat-flat-button
+          type="button"
+          [disabled]="applying() || selectedCount() === 0"
+          (click)="applyCandidates()"
+        >
+          @if (applying()) {
+            <mat-progress-spinner mode="indeterminate" [diameter]="16" />
+            落库中…
+          } @else {
+            <ng-container>
+              <mat-icon fontSet="material-symbols-outlined">check_circle</mat-icon>
+              确认落库（{{ selectedCount() }} 条）
+            </ng-container>
+          }
+        </button>
+      </mat-card-actions>
+    </mat-card>
+  }
+
+  <!-- ── 3. 管理区 ─────────────────────────────── -->
+  <mat-card appearance="outlined" class="panel">
+    <mat-card-header>
+      <mat-card-title>③ 我的档案</mat-card-title>
+      <mat-card-subtitle>已落库的五类对象，可改状态 / 改名 / 删除</mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      @if (loadingSnapshot()) {
+        <p class="notice notice--muted">
+          <mat-progress-spinner mode="indeterminate" [diameter]="18" />
+          正在加载档案…
+        </p>
+      } @else if (snapshotError(); as message) {
+        <p class="notice notice--error">
+          <mat-icon fontSet="material-symbols-outlined">error</mat-icon>
+          <span>{{ message }}</span>
+        </p>
+      } @else {
+        @if (lastApplied() > 0) {
+          <p class="notice notice--ok">
+            <mat-icon fontSet="material-symbols-outlined">task_alt</mat-icon>
+            <span>已落库 {{ lastApplied() }} 条</span>
+          </p>
+        }
+
+        <div class="kinds">
+          @for (kind of allKinds; track kind) {
+            <div class="kind">
+              <h3 class="kind__title">
+                <mat-icon fontSet="material-symbols-outlined">{{ kindIcons[kind] }}</mat-icon>
+                {{ kindLabels[kind] }}
+                <span class="kind__count">{{ countOf(kind) }}</span>
+              </h3>
+
+              @if (itemsOf(kind).length === 0) {
+                <p class="kind__empty">还没有条目</p>
+              } @else {
+                <ul class="kind__list">
+                  @for (item of itemsOf(kind); track item.id) {
+                    <li class="item">
+                      @if (editing()?.id === item.id) {
+                        <div class="item__edit">
+                          <input
+                            class="item__edit-input"
+                            [value]="editing()?.draft"
+                            (input)="editing.set({ kind: kind, id: item.id, draft: editInput.value })"
+                            #editInput
+                            (keydown.enter)="saveEdit()"
+                            (keydown.escape)="cancelEdit()"
+                          />
+                          <button mat-icon-button type="button" aria-label="保存" (click)="saveEdit()">
+                            <mat-icon fontSet="material-symbols-outlined">check</mat-icon>
+                          </button>
+                          <button mat-icon-button type="button" aria-label="取消" (click)="cancelEdit()">
+                            <mat-icon fontSet="material-symbols-outlined">close</mat-icon>
+                          </button>
+                        </div>
+                      } @else {
+                        <div class="item__main">
+                          <button
+                            type="button"
+                            class="item__label"
+                            (click)="startEdit(kind, item.id, labelOf(kind, item))"
+                            matTooltip="点击改名"
+                          >
+                            {{ labelOf(kind, item) }}
+                          </button>
+
+                          @if (statusOf(item); as status) {
+                            <mat-form-field appearance="outline" class="item__status" subscriptSizing="dynamic">
+                              <mat-select
+                                [value]="item['status']"
+                                (selectionChange)="changeStatus(kind, item.id, $event.value)"
+                              >
+                                @for (option of statusOptions(kind); track option) {
+                                  <mat-option [value]="option">{{ statusLabels[option] }}</mat-option>
+                                }
+                              </mat-select>
+                            </mat-form-field>
+                          }
+
+                          <button
+                            mat-icon-button
+                            type="button"
+                            class="item__delete"
+                            aria-label="删除"
+                            [disabled]="saving() === kind + ':' + item.id"
+                            (click)="removeItem(kind, item.id)"
+                          >
+                            <mat-icon fontSet="material-symbols-outlined">delete_outline</mat-icon>
+                          </button>
+                        </div>
+
+                        @if (metaOf(kind, item); as meta) {
+                          <p class="item__meta">{{ meta }}</p>
+                        }
+                      }
+                    </li>
+                  }
+                </ul>
+              }
+            </div>
+          }
+        </div>
+      }
+    </mat-card-content>
+
+    <mat-card-actions>
+      <button matButton type="button" [disabled]="loadingSnapshot()" (click)="refreshSnapshot()">
+        <mat-icon fontSet="material-symbols-outlined">refresh</mat-icon>
+        刷新
+      </button>
+    </mat-card-actions>
+  </mat-card>
+</section>

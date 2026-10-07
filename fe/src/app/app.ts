@@ -31,6 +31,7 @@ export class App {
     { path: '/dashboard', label: '面板', icon: 'dashboard' },
     { path: '/goals', label: '目标', icon: 'flag' },
     { path: '/quests', label: '任务', icon: 'task_alt' },
+    { path: '/map', label: '档案', icon: 'map' },
     { path: '/profile', label: '角色卡', icon: 'military_tech' },
     { path: '/insights', label: '复盘', icon: 'insights' },
   ];

@@ -43,6 +43,7 @@ describe('App', () => {
       '/dashboard',
       '/goals',
       '/quests',
+      '/map',
       '/profile',
       '/insights',
     ]);

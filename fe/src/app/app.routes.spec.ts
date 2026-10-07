@@ -10,6 +10,7 @@ describe('app routes (M2 骨架)', () => {
       'dashboard',
       'goals',
       'quests',
+      'map',
       'profile',
       'insights',
       '**',
@@ -21,6 +22,7 @@ describe('app routes (M2 骨架)', () => {
       'dashboard',
       'goals',
       'quests',
+      'map',
       'profile',
       'insights',
     ]);
