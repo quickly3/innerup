@@ -1,5 +1,5 @@
 // InnerUp 数据模型
-// 对应《项目规划》第 7 节。数据库：远端托管 PostgreSQL。
+// 对应《项目规划》第 7 节（docs/项目规划/07-数据模型.md）。数据库：远端托管 PostgreSQL。
 // 连接串配置见根目录 `prisma.config.ts`（Prisma v7 起不写在 schema 里）。
 
 generator client {

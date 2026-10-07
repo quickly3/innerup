@@ -19,6 +19,7 @@
   &__title {
     font-weight: 700;
     letter-spacing: -0.01em;
+    white-space: nowrap;
   }
 
   &__spacer {
@@ -31,6 +32,65 @@
   }
 }
 
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  &__link {
+    flex: 0 0 auto;
+    color: var(--mat-sys-on-surface-variant);
+
+    &--active {
+      color: var(--mat-sys-primary);
+      background: var(--mat-sys-secondary-container);
+    }
+  }
+
+  &__icon {
+    margin-right: 6px;
+  }
+}
+
 .app-main {
   flex: 1 1 auto;
+}
+
+// 窄屏：收起标语与文字标签，只留图标（元素上已有 aria-label 保留可读名称）
+@media (max-width: 900px) {
+  .toolbar__tagline {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .nav {
+    gap: 0;
+  }
+
+  .nav__link {
+    min-width: 40px;
+  }
+
+  .nav__label {
+    display: none;
+  }
+
+  .nav__icon {
+    margin-right: 0;
+  }
+}
+
+// 超窄屏：品牌文字让位给导航图标
+@media (max-width: 480px) {
+  .toolbar__title {
+    display: none;
+  }
 }

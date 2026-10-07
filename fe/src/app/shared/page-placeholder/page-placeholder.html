@@ -1,0 +1,27 @@
+<section class="placeholder">
+  <mat-card appearance="outlined" class="placeholder__card">
+    <mat-card-header>
+      <mat-icon matCardAvatar fontSet="material-symbols-outlined" class="placeholder__icon">
+        {{ icon() }}
+      </mat-icon>
+      <mat-card-title>{{ title() }}</mat-card-title>
+      @if (milestone(); as phase) {
+        <mat-card-subtitle>计划在 {{ phase }} 实现</mat-card-subtitle>
+      }
+    </mat-card-header>
+
+    <mat-card-content>
+      @if (description(); as text) {
+        <p class="placeholder__desc">{{ text }}</p>
+      }
+
+      @if (planned().length > 0) {
+        <ul class="placeholder__list">
+          @for (item of planned(); track item) {
+            <li>{{ item }}</li>
+          }
+        </ul>
+      }
+    </mat-card-content>
+  </mat-card>
+</section>

@@ -101,12 +101,38 @@
 }
 
 .roadmap {
-  margin: 0;
-  padding-left: 20px;
   display: grid;
   gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
   color: var(--mat-sys-on-surface-variant);
   line-height: 1.6;
+
+  &__item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+
+    &--done {
+      color: var(--mat-sys-on-surface-variant);
+      opacity: 0.75;
+    }
+  }
+
+  &__mark {
+    flex: 0 0 auto;
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+    line-height: 20px;
+    margin-top: 2px;
+    color: var(--mat-sys-outline);
+  }
+
+  &__item--done &__mark {
+    color: var(--mat-sys-primary);
+  }
 
   strong {
     color: var(--mat-sys-on-surface);

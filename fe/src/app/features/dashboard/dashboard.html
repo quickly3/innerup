@@ -1,10 +1,10 @@
 <section class="dashboard">
   <header class="hero">
-    <p class="hero__eyebrow">M1 · 脚手架跑通</p>
+    <p class="hero__eyebrow">M2 · 数据与骨架</p>
     <h1 class="hero__title">把「我想变得更好」<br />变成一款可玩的 RPG</h1>
     <p class="hero__subtitle">
       这里最终会是你的角色面板：等级、经验值、技能雷达图与今日任务。
-      现在先确认前后端与数据库已经接上。
+      现在数据表已迁移落库、路由骨架也已就位，先确认前后端与数据库已经接上。
     </p>
   </header>
 
@@ -72,14 +72,50 @@
     </mat-card-header>
 
     <mat-card-content>
-      <ol class="roadmap">
-        <li><strong>M2</strong> 数据与骨架：迁移落库、路由骨架、Swagger</li>
-        <li><strong>M3</strong> 目标与任务：Goal / Quest 的 CRUD 与页面</li>
-        <li><strong>M4</strong> AI 生成任务线：<code>AiModule</code> + 结构化输出</li>
-        <li><strong>M5</strong> 打卡与成长：XP、等级、streak、热力图</li>
-        <li><strong>M6</strong> AI 评审：打卡后即时反馈（SSE 流式）</li>
-        <li><strong>M7</strong> 打磨与部署</li>
-      </ol>
+      <ul class="roadmap">
+        <li class="roadmap__item roadmap__item--done">
+          <mat-icon fontSet="material-symbols-outlined" class="roadmap__mark">
+            check_circle
+          </mat-icon>
+          <span><strong>M1</strong> 脚手架：Angular + NestJS + Prisma + 远端 PostgreSQL</span>
+        </li>
+        <li class="roadmap__item roadmap__item--done">
+          <mat-icon fontSet="material-symbols-outlined" class="roadmap__mark">
+            check_circle
+          </mat-icon>
+          <span><strong>M2</strong> 数据与骨架：迁移落库、路由骨架、Swagger</span>
+        </li>
+        <li class="roadmap__item">
+          <mat-icon fontSet="material-symbols-outlined" class="roadmap__mark">
+            radio_button_unchecked
+          </mat-icon>
+          <span><strong>M3</strong> 目标与任务：Goal / Quest 的 CRUD 与页面</span>
+        </li>
+        <li class="roadmap__item">
+          <mat-icon fontSet="material-symbols-outlined" class="roadmap__mark">
+            radio_button_unchecked
+          </mat-icon>
+          <span><strong>M4</strong> AI 生成任务线：<code>AiModule</code> + 结构化输出</span>
+        </li>
+        <li class="roadmap__item">
+          <mat-icon fontSet="material-symbols-outlined" class="roadmap__mark">
+            radio_button_unchecked
+          </mat-icon>
+          <span><strong>M5</strong> 打卡与成长：XP、等级、streak、热力图</span>
+        </li>
+        <li class="roadmap__item">
+          <mat-icon fontSet="material-symbols-outlined" class="roadmap__mark">
+            radio_button_unchecked
+          </mat-icon>
+          <span><strong>M6</strong> AI 评审：打卡后即时反馈（SSE 流式）</span>
+        </li>
+        <li class="roadmap__item">
+          <mat-icon fontSet="material-symbols-outlined" class="roadmap__mark">
+            radio_button_unchecked
+          </mat-icon>
+          <span><strong>M7</strong> 打磨与部署</span>
+        </li>
+      </ul>
     </mat-card-content>
   </mat-card>
 </section>

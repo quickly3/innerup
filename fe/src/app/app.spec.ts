@@ -31,4 +31,20 @@ describe('App', () => {
       'InnerUp',
     );
   });
+
+  it('should render a nav link for every top-level route', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const compiled = fixture.nativeElement as HTMLElement;
+    const links = Array.from(compiled.querySelectorAll('.nav__link')).map(
+      (link) => (link as HTMLAnchorElement).getAttribute('href'),
+    );
+    expect(links).toEqual([
+      '/dashboard',
+      '/goals',
+      '/quests',
+      '/profile',
+      '/insights',
+    ]);
+  });
 });

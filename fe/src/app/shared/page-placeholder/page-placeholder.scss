@@ -1,0 +1,32 @@
+:host {
+  display: block;
+}
+
+.placeholder {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 40px 20px 64px;
+
+  &__card {
+    border-radius: 16px;
+  }
+
+  &__icon {
+    color: var(--mat-sys-primary);
+  }
+
+  &__desc {
+    margin: 0 0 16px;
+    color: var(--mat-sys-on-surface-variant);
+    line-height: 1.7;
+  }
+
+  &__list {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding-left: 20px;
+    color: var(--mat-sys-on-surface-variant);
+    line-height: 1.6;
+  }
+}

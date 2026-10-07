@@ -38,6 +38,26 @@ npm run start:dev
 
 `http://localhost:3000/docs`
 
+## 数据库迁移
+
+`prisma/schema.prisma` 是数据模型的事实来源（对应[《项目规划》第 7 节 · 数据模型](../docs/项目规划/07-数据模型.md)），
+迁移文件提交在 `be/prisma/migrations/`（首次为 `20261007060913_init`：
+User / Skill / Goal / Quest / CheckIn / Review / Achievement）。
+
+改动 schema 后：
+
+```bash
+npm run prisma:migrate   # 开发：生成迁移并应用（prisma migrate dev）
+npm run prisma:deploy    # 部署：只应用已提交的迁移（prisma migrate deploy）
+npm run prisma:studio    # 可视化查看数据
+```
+
+注意：
+
+- `prisma migrate dev` 需要 **shadow database**；账号没有建库权限时会报 `P3014`，
+  这时在 `be/.env` 里补上 `SHADOW_DATABASE_URL` 即可。
+- 迁移用的连接串建议填**直连地址**（Neon 上带 `-pooler` 的是连接池地址，迁移会失败）。
+
 ## 主要约定
 
 - 统一响应体：所有控制器返回 `ApiResponse<T>` 格式 `{ code, data, message }`。
@@ -55,6 +75,7 @@ npm run start:dev
 - `npm run start:prod`：运行 `dist` 下的产物
 - `npm run prisma:generate`：生成 Prisma client
 - `npm run prisma:migrate`：运行迁移（开发）
+- `npm run prisma:deploy`：应用已提交的迁移（部署）
 - `npm run prisma:studio`：打开 `prisma studio`
 
 ## 注意

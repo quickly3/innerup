@@ -2,7 +2,7 @@
 
 InnerUp 的 Web 前端。以游戏化界面承载「任务线 / 打卡 / 角色面板」等交互。
 
-- 上层规划见 [`../docs/项目规划.md`](../docs/项目规划.md)
+- 上层规划见 [`../docs/项目规划.md`](../docs/项目规划.md)（索引页；正文按章节拆分在 `../docs/项目规划/` 下，可单节查阅）
 - 后端说明见 [`../be/README.md`](../be/README.md)
 
 ---
@@ -86,16 +86,38 @@ fe/
    └─ app/
       ├─ app.config.ts          # provideRouter / provideHttpClient / 拦截器
       ├─ app.routes.ts          # 路由（全部懒加载）
-      ├─ app.ts / .html / .scss # 应用外壳（工具栏 + router-outlet）
+      ├─ app.ts / .html / .scss # 应用外壳（工具栏导航 + router-outlet）
+      ├─ app.routes.spec.ts     # 路由骨架测试（路径、懒加载、页面标题）
       ├─ core/
       │  ├─ api/                # 各资源 HTTP 服务（health.service.ts ...）
       │  ├─ interceptors/       # api.interceptor.ts：baseURL + 响应解包
       │  └─ state/              # Signals 状态服务（后续）
-      ├─ shared/                # 复用组件、管道、指令（后续）
+      ├─ shared/
+      │  └─ page-placeholder/   # 未实现页面的统一占位卡片
       ├─ features/
-      │  └─ dashboard/          # 角色面板（M1 阶段做环境自检）
+      │  ├─ dashboard/          # 面板（M1 环境自检；M5 换成等级 / XP / 今日任务）
+      │  ├─ goals/              # 目标列表 / 详情（M3 实现）
+      │  ├─ quests/             # 任务列表 + 打卡（M3 / M5 实现）
+      │  ├─ profile/            # 角色卡 / 技能雷达（M5 实现）
+      │  └─ insights/           # 复盘（MVP 之后）
       └─ ui/                    # 经验条、雷达图、热力图等展示组件（后续）
 ```
+
+## 路由骨架
+
+M2 已把一级路由与页面骨架搭好，全部懒加载：
+
+| 路径 | 页面 | 状态 |
+| --- | --- | --- |
+| `/dashboard` | 面板 | ✅ 已有环境自检；M5 换成等级 / XP / 今日任务 |
+| `/goals` | 目标（任务线） | ⏳ 占位 → M3 实现 CRUD 与列表 |
+| `/quests` | 任务 | ⏳ 占位 → M3 列表、M5 打卡 |
+| `/profile` | 角色卡 | ⏳ 占位 → M5 实现 |
+| `/insights` | 复盘 | ⏳ 占位（不在 MVP 范围） |
+| `''`、`**` | — | 重定向到 `/dashboard` |
+
+未实现的页面统一复用 `shared/page-placeholder/page-placeholder.ts`（说明「计划在哪个里程碑做什么」）。
+实现某个页面时，把 `app.routes.ts` 里对应的 `loadComponent` 指向真实组件即可，导航与标题无需改动。
 
 ## 开发约定
 
@@ -107,6 +129,7 @@ fe/
 - 服务里写**相对路径**（如 `'/health'`），**不要写 `/api` 前缀、更不要硬编码 `localhost:3000`** ——
   `apiInterceptor` 会统一补全 baseURL 并解包 `{ code, data, message }`，业务代码直接拿 `data`。
 - 路由按 `features/` **懒加载**：`loadComponent: () => import('./features/x/x').then(m => m.X)`。
+- **新页面先接骨架**：占位页复用 `shared/page-placeholder`，真实实现时只改 `app.routes.ts` 一行。
 - 提交前跑 `npm run build` 与 `npm test`。
 
 ### 一个最小示例
