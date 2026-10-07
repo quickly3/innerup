@@ -8,12 +8,14 @@ import {
 import { AiUnavailableError } from '../ai/ai.errors.js';
 import { AiService } from '../ai/ai.service.js';
 import {
+  buildMapGithubUserPrompt,
   buildMapIngestUserPrompt,
+  MAP_GITHUB_INGEST_SYSTEM_PROMPT,
   MAP_INGEST_SYSTEM_PROMPT,
+  type ExistingMapSummary,
 } from '../ai/prompts/map-ingest.prompt.js';
 import {
   mapIngestResultSchema,
-  type MapIngestResult,
 } from '../ai/schemas/map-ingest.schema.js';
 import {
   MAX_INGEST_CHARS,
@@ -21,32 +23,16 @@ import {
   MIN_INGEST_CHARS,
   PDF_MIME_TYPE,
 } from './growth.constants.js';
+import { GithubReadmeService } from './github-readme.service.js';
 import { GrowthService } from './growth.service.js';
 import { extractPdfText } from './pdf-text.js';
-
-/** Multer 内存存储下的上传文件（不引 `@types/multer`，只声明用得到的字段）。 */
-export interface UploadedPdfFile {
-  originalname: string;
-  mimetype: string;
-  size: number;
-  buffer: Buffer;
-}
-
-export interface IngestResult {
-  /** 待用户确认的候选，结构见《项目规划》第 13.9 节 */
-  candidates: MapIngestResult;
-  meta: {
-    /** 实际参与归类的字数 */
-    chars: number;
-    /** 是否因过长被截断 */
-    truncated: boolean;
-  };
-}
+import type { IngestResult, UploadedPdfFile } from './map-ingest.types.js';
 
 /**
- * 「文本 / PDF → AI 归类」链路（《项目规划》第 13.9 节）。
+ * 「文本 / PDF / GitHub → AI 归类」链路（《项目规划》第 13.9 节）。
  *
- * 只返回候选、**不落库**：用户改 / 删 / 换类之后再调 `/api/map/candidates/apply`。
+ * 三种输入只在前半段不同（抽文本），后半段共用同一个 `classify`：
+ * 只返回候选、**不落库**，用户改 / 删 / 换类之后再调 `/api/map/candidates/apply`。
  * AI 失败时抛 503，让前端降级到手动录入，而不是把整个录入流程卡死。
  */
 @Injectable()
@@ -56,11 +42,46 @@ export class MapIngestService {
   constructor(
     private readonly ai: AiService,
     private readonly growth: GrowthService,
+    private readonly github: GithubReadmeService,
   ) {}
 
   async ingestText(rawText: string): Promise<IngestResult> {
     const prepared = prepareText(rawText);
-    return this.classify(prepared.text, prepared.truncated);
+
+    return this.classify(prepared.text, prepared.truncated, (existing) => ({
+      system: MAP_INGEST_SYSTEM_PROMPT,
+      user: buildMapIngestUserPrompt(prepared.text, existing),
+    }));
+  }
+
+  async ingestGithub(rawUrl: string): Promise<IngestResult> {
+    const bundle = await this.github.fetchReadmes(rawUrl);
+
+    const result = await this.classify(bundle.text, bundle.truncated, (existing) => ({
+      system: MAP_GITHUB_INGEST_SYSTEM_PROMPT,
+      user: buildMapGithubUserPrompt(bundle.target.display, bundle.text, existing),
+    }));
+
+    return {
+      candidates: result.candidates,
+      meta: {
+        ...result.meta,
+        github: {
+          source: bundle.target.display,
+          owner: bundle.target.owner,
+          profile: bundle.profile
+            ? {
+                login: bundle.profile.login,
+                name: bundle.profile.name,
+                bio: bundle.profile.bio,
+              }
+            : null,
+          repos: bundle.repos.map((repo) => repo.fullName),
+          skipped: bundle.skipped,
+          totalRepos: bundle.totalRepos,
+        },
+      },
+    };
   }
 
   async ingestPdf(file: UploadedPdfFile | undefined): Promise<IngestResult> {
@@ -90,19 +111,24 @@ export class MapIngestService {
     }
 
     const prepared = prepareText(extracted);
-    return this.classify(prepared.text, prepared.truncated);
+
+    return this.classify(prepared.text, prepared.truncated, (existing) => ({
+      system: MAP_INGEST_SYSTEM_PROMPT,
+      user: buildMapIngestUserPrompt(prepared.text, existing),
+    }));
   }
 
+  /** 三种输入共用的后半段：一次 AI 调用 + Zod 校验，失败转 503 让前端降级。 */
   private async classify(
     text: string,
     truncated: boolean,
+    buildPrompt: (existing: ExistingMapSummary) => { system: string; user: string },
   ): Promise<IngestResult> {
     const existing = await this.growth.existingSummary();
 
     try {
       const candidates = await this.ai.completeJson({
-        system: MAP_INGEST_SYSTEM_PROMPT,
-        user: buildMapIngestUserPrompt(text, existing),
+        ...buildPrompt(existing),
         schema: mapIngestResultSchema,
         maxTokens: 4000,
       });

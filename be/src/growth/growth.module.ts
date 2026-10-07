@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { AiModule } from '../ai/ai.module.js';
 import { CurrentUserService } from '../common/current-user.service.js';
+import { GithubReadmeService } from './github-readme.service.js';
 import { GrowthController } from './growth.controller.js';
 import { GrowthService } from './growth.service.js';
 import { MapIngestService } from './map-ingest.service.js';
@@ -10,7 +11,12 @@ import { MapIngestService } from './map-ingest.service.js';
 @Module({
   imports: [AiModule],
   controllers: [GrowthController],
-  providers: [GrowthService, MapIngestService, CurrentUserService],
+  providers: [
+    GrowthService,
+    MapIngestService,
+    GithubReadmeService,
+    CurrentUserService,
+  ],
   exports: [GrowthService],
 })
 export class GrowthModule {}

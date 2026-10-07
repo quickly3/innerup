@@ -10,3 +10,17 @@ export class AiUnavailableError extends Error {
     this.name = 'AiUnavailableError';
   }
 }
+
+/**
+ * 模型的**输出预算被耗尽**：`finish_reason === 'length'` 且没有正文。
+ *
+ * 推理模型（如 `deepseek-v4-flash`）的思维链也算进 `max_tokens`，
+ * 输入一长、思考一多就会把额度吃光、正文留空。
+ * 这类失败**不是上游故障**，重新试只是浪费——正确做法是**放大 max_tokens 再试**。
+ */
+export class AiOutputTruncatedError extends AiUnavailableError {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = 'AiOutputTruncatedError';
+  }
+}

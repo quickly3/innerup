@@ -24,6 +24,7 @@ import {
   STATUS_LABELS,
   MapService,
   type Candidates,
+  type GithubIngestMeta,
   type MapKind,
   type MapSnapshot,
   type SnapshotItem,
@@ -96,6 +97,8 @@ export class MapPage {
   protected readonly text = signal('');
   protected readonly pdfName = signal<string | null>(null);
   protected readonly pdfChars = signal<number | null>(null);
+  protected readonly githubUrl = signal('');
+  protected readonly githubInfo = signal<string | null>(null);
   protected readonly ingesting = signal(false);
   protected readonly ingestError = signal<string | null>(null);
   protected readonly emptyResult = signal(false);
@@ -105,6 +108,8 @@ export class MapPage {
   // ── 待确认区
   protected readonly candidates = signal<CandidateRow[]>([]);
   protected readonly applying = signal(false);
+  /** 候选很少时提示「可能是重复」，见 13.9「结果少」 */
+  protected readonly fewResultsHint = signal<string | null>(null);
 
   // ── 管理区
   protected readonly snapshot = signal<MapSnapshot | null>(null);
@@ -177,9 +182,37 @@ export class MapPage {
     this.ingesting.set(true);
     this.ingestError.set(null);
     this.emptyResult.set(false);
+    this.fewResultsHint.set(null);
 
     this.mapService.ingestText(text).subscribe({
       next: (result) => this.onIngested(result),
+      error: (error: unknown) => {
+        this.ingesting.set(false);
+        this.ingestError.set(describeError(error));
+      },
+    });
+  }
+
+  /** GitHub 地址录入：后端读公开仓库 README 再交给同一条归类链路。 */
+  protected ingestGithub(): void {
+    const url = this.githubUrl().trim();
+
+    if (url.length === 0) {
+      this.ingestError.set('先填一个 GitHub 地址，例如 https://github.com/yourname');
+      return;
+    }
+
+    this.ingesting.set(true);
+    this.ingestError.set(null);
+    this.emptyResult.set(false);
+    this.githubInfo.set(null);
+    this.fewResultsHint.set(null);
+
+    this.mapService.ingestGithub(url).subscribe({
+      next: (result) => {
+        this.githubInfo.set(describeGithubImport(result.meta.github));
+        this.onIngested(result);
+      },
       error: (error: unknown) => {
         this.ingesting.set(false);
         this.ingestError.set(describeError(error));
@@ -199,6 +232,7 @@ export class MapPage {
     this.ingesting.set(true);
     this.ingestError.set(null);
     this.emptyResult.set(false);
+    this.fewResultsHint.set(null);
 
     this.mapService.ingestPdf(file).subscribe({
       next: (result) => {
@@ -222,7 +256,34 @@ export class MapPage {
     );
 
     this.candidates.set(rows);
-    this.emptyResult.set(rows.length === 0);
+    this.emptyResult.set(rows.length === 0 && !this.hasExistingEntries());
+    this.fewResultsHint.set(this.describeFewResults(rows.length));
+  }
+
+  /**
+   * 候选少多半不是「AI 没读懂」，而是**大部分内容已经在档案里**（prompt 会让模型跳过重复项）。
+   * 不解释清楚的话，用户会以为功能坏了。
+   */
+  private describeFewResults(count: number): string | null {
+    if (!this.hasExistingEntries()) {
+      return null;
+    }
+
+    if (count === 0) {
+      return '这次没有新增：识别到的内容基本都已经在档案里了（AI 会自动跳过重复项）。想补充新内容可以换个来源再试。';
+    }
+
+    if (count <= 3) {
+      return `这次只新增 ${count} 条：其余识别到的内容已经在你档案里了（AI 会自动跳过重复项，避免重复条目）。`;
+    }
+
+    return null;
+  }
+
+  private hasExistingEntries(): boolean {
+    const snapshot = this.snapshot();
+
+    return snapshot !== null && ALL_KINDS.some((kind) => snapshot[kind].length > 0);
   }
 
   private toRow(kind: MapKind, raw: Record<string, unknown>): CandidateRow {
@@ -319,6 +380,8 @@ export class MapPage {
         this.text.set('');
         this.pdfName.set(null);
         this.pdfChars.set(null);
+        this.githubUrl.set('');
+        this.githubInfo.set(null);
         this.refreshSnapshot(total);
       },
       error: (error: unknown) => {
@@ -487,4 +550,22 @@ function describeError(error: unknown): string {
     return httpError.message;
   }
   return '出了点问题，请稍后再试';
+}
+
+/** 告诉用户「读了资料卡与哪些仓库」，让他知道 AI 的判断基于什么。 */
+function describeGithubImport(meta: GithubIngestMeta | undefined): string | null {
+  if (!meta) {
+    return null;
+  }
+
+  const who = meta.profile?.name ? `${meta.profile.name}（${meta.source}）` : meta.source;
+  const read = [
+    meta.profile ? '资料卡' : null,
+    `${meta.repos.length} 个仓库 README`,
+  ]
+    .filter((item): item is string => item !== null)
+    .join(' + ');
+  const skipped = meta.skipped > 0 ? `，跳过 ${meta.skipped} 个没有 README 的仓库` : '';
+
+  return `已读取 ${who}：${read}${skipped}`;
 }

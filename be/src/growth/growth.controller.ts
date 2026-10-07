@@ -21,8 +21,13 @@ import {
 
 import { MAX_PDF_BYTES, MapKind } from './growth.constants.js';
 import { GrowthService } from './growth.service.js';
-import { MapIngestService, type UploadedPdfFile } from './map-ingest.service.js';
-import { ApplyCandidatesDto, IngestTextDto } from './dto/candidates.dto.js';
+import { MapIngestService } from './map-ingest.service.js';
+import type { UploadedPdfFile } from './map-ingest.types.js';
+import {
+  ApplyCandidatesDto,
+  IngestGithubDto,
+  IngestTextDto,
+} from './dto/candidates.dto.js';
 import {
   CreateFocusDto,
   CreateInputDto,
@@ -88,6 +93,18 @@ export class GrowthController {
   })
   ingestPdf(@UploadedFile() file?: UploadedPdfFile) {
     return this.ingest.ingestPdf(file);
+  }
+
+  @Post('ingest/github')
+  @ApiOperation({
+    summary: 'GitHub 地址 → 读公开仓库 README → AI 归类',
+    description:
+      '填账号主页地址读它最近推送的若干个公开仓库（不含 fork），填仓库主页地址只读那一个；' +
+      '只打 https://api.github.com、只读公开内容，README 不落盘。' +
+      '仓库数 / 字数都有上限，限流或 AI 不可用返回 503，前端降级为手动新增。',
+  })
+  ingestGithub(@Body() dto: IngestGithubDto) {
+    return this.ingest.ingestGithub(dto.url);
   }
 
   @Post('candidates/apply')

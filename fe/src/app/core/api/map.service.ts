@@ -172,7 +172,28 @@ export interface Candidates {
 
 export interface IngestResult {
   candidates: Candidates;
-  meta: { chars: number; truncated: boolean };
+  meta: IngestMeta;
+}
+
+/** GitHub 录入的读取情况（只有 `ingestGithub` 的 meta 里才有）。 */
+export interface GithubIngestMeta {
+  /** 归一化后的来源：`owner` 或 `owner/repo` */
+  source: string;
+  owner: string;
+  /** overview 资料卡读到了就带上（读不到为 null，不影响归类） */
+  profile: { login: string; name: string | null; bio: string | null } | null;
+  /** 实际读到 README 的仓库（`owner/repo`） */
+  repos: string[];
+  /** 没有 README 或读取失败的仓库数 */
+  skipped: number;
+  /** 纳入分析的公开仓库总数 */
+  totalRepos: number;
+}
+
+export interface IngestMeta {
+  chars: number;
+  truncated: boolean;
+  github?: GithubIngestMeta;
 }
 
 export interface ApplyResult {
@@ -208,6 +229,11 @@ export class MapService {
     const form = new FormData();
     form.append('file', file, file.name);
     return this.http.post<IngestResult>('/map/ingest/pdf', form);
+  }
+
+  /** GitHub 账号 / 仓库地址 → 后端读公开仓库 README → AI 归类。 */
+  ingestGithub(url: string): Observable<IngestResult> {
+    return this.http.post<IngestResult>('/map/ingest/github', { url });
   }
 
   /** 确认候选（可编辑 / 部分确认）后落库。 */

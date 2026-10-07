@@ -294,6 +294,20 @@ export class IngestTextDto {
   text!: string;
 }
 
+/** `POST /api/map/ingest/pdf` 以外的另一种「非文本」录入入口：GitHub 地址。 */
+export class IngestGithubDto {
+  @ApiProperty({
+    description:
+      'GitHub 账号主页或仓库主页地址（也接受 `owner` / `owner/repo` / SSH 远端写法）',
+    example: 'https://github.com/yourname',
+    maxLength: 200,
+  })
+  @IsString()
+  @MinLength(1, { message: '请填 GitHub 地址' })
+  @MaxLength(200, { message: '地址太长了，填账号或仓库主页就行' })
+  url!: string;
+}
+
 /** `POST /api/map/candidates/apply` 的请求体。 */
 export class ApplyCandidatesDto {
   @ApiProperty({ type: () => CandidatesDto })

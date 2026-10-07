@@ -107,6 +107,30 @@
   gap: 8px;
 }
 
+.github-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+
+  &__icon {
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  &__field {
+    flex: 1 1 240px;
+    min-width: 200px;
+  }
+
+  &__button {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+}
+
 .notice {
   display: flex;
   align-items: flex-start;

@@ -3,8 +3,8 @@
     <p class="hero__eyebrow">M2.5 · 个人档案</p>
     <h1 class="hero__title">把你自己讲清楚</h1>
     <p class="hero__subtitle">
-      粘一段自我介绍 / 简历 / 最近在忙的事，或传一份 PDF，AI 会把它归类成
-      关注点 / 兴趣 / 输入 / 知识 / 技能五类对象。你只需要确认——这是 AI 生成任务线的全部依据。
+      粘一段自我介绍 / 简历 / 最近在忙的事，传一份 PDF，或填 GitHub 地址让 AI 读你的公开资料与仓库 README，
+      AI 会把它归类成 关注点 / 兴趣 / 输入 / 知识 / 技能五类对象。你只需要确认——这是 AI 生成任务线的全部依据。
     </p>
   </header>
 
@@ -97,16 +97,54 @@
         </button>
       </div>
 
+      <div class="github-row">
+        <mat-icon fontSet="material-symbols-outlined" class="github-row__icon">code</mat-icon>
+        <mat-form-field appearance="outline" class="github-row__field">
+          <mat-label>GitHub 账号或仓库地址</mat-label>
+          <input
+            matInput
+            type="url"
+            [value]="githubUrl()"
+            (input)="githubUrl.set(githubInput.value)"
+            placeholder="https://github.com/yourname"
+            #githubInput
+          />
+        </mat-form-field>
+
+        <button
+          mat-stroked-button
+          type="button"
+          class="github-row__button"
+          [disabled]="ingesting()"
+          (click)="ingestGithub()"
+        >
+          <mat-icon fontSet="material-symbols-outlined">travel_explore</mat-icon>
+          读 README 帮我归类
+        </button>
+      </div>
+
       @if (ingestError(); as message) {
         <p class="notice notice--error">
           <mat-icon fontSet="material-symbols-outlined">error</mat-icon>
           <span>{{ message }}</span>
         </p>
       }
+      @if (githubInfo(); as info) {
+        <p class="notice notice--ok">
+          <mat-icon fontSet="material-symbols-outlined">check_circle</mat-icon>
+          <span>{{ info }}</span>
+        </p>
+      }
       @if (emptyResult()) {
         <p class="notice notice--muted">
           <mat-icon fontSet="material-symbols-outlined">search_off</mat-icon>
           <span>{{ emptyResultHint }}</span>
+        </p>
+      }
+      @if (fewResultsHint(); as hint) {
+        <p class="notice notice--muted">
+          <mat-icon fontSet="material-symbols-outlined">info</mat-icon>
+          <span>{{ hint }}</span>
         </p>
       }
     </mat-card-content>

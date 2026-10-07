@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { ZodType } from 'zod';
 
-import { AiUnavailableError } from './ai.errors.js';
+import { AiOutputTruncatedError, AiUnavailableError } from './ai.errors.js';
 
 /** 一次「要求模型返回 JSON，再用 Zod 二次校验」的调用参数。 */
 export interface JsonCompletionOptions<T> {
@@ -17,17 +17,27 @@ export interface JsonCompletionOptions<T> {
   timeoutMs?: number;
 }
 
+/** 调用方没指定时的输出预算；推理模型的思维链也在这个额度里。 */
+const DEFAULT_MAX_TOKENS = 4_000;
+
 interface ChatCompletionResponse {
-  choices?: Array<{ message?: { content?: string | null } }>;
+  choices?: Array<{
+    message?: { content?: string | null };
+    finish_reason?: string | null;
+  }>;
 }
 
 const DEFAULT_BASE_URL = 'https://api.deepseek.com/v1';
 const DEFAULT_MODEL = 'deepseek-chat';
 const DEFAULT_TIMEOUT_MS = 60_000;
 const DEFAULT_TEMPERATURE = 0.2;
-/** 上游抖动 / 输出跑偏时重试一次即可，避免单次请求长时间挂起。 */
-const MAX_ATTEMPTS = 2;
+/** 上游抖动 / 输出跑偏时重试；截断要放大预算，所以多给一次机会（共 3 次）。 */
+const MAX_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 600;
+/** 输出预算被截断时，下一次的 max_tokens 放大倍数。 */
+const TOKEN_GROWTH = 2;
+/** max_tokens 上限：推理模型的思维链也占额度，但也不能无限放大。 */
+const MAX_OUTPUT_TOKENS = 16_000;
 
 /**
  * AI 服务：对外只暴露「给提示词、拿结构化对象」这一件事。
@@ -58,10 +68,12 @@ export class AiService {
 
     let lastError: unknown;
     let lastAiError: AiUnavailableError | undefined;
+    // 推理模型的思维链也算进 max_tokens；被截断一次就放大预算再来
+    let maxTokens = options.maxTokens ?? DEFAULT_MAX_TOKENS;
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
       try {
-        const content = await this.requestJsonText(options);
+        const content = await this.requestJsonText({ ...options, maxTokens });
         const result = options.schema.safeParse(parseJsonLoose(content));
 
         if (!result.success) {
@@ -80,9 +92,16 @@ export class AiService {
           lastAiError = error;
         }
 
-        this.logger.warn(
-          `AI 调用第 ${attempt}/${MAX_ATTEMPTS} 次失败：${describeError(error)}`,
-        );
+        if (error instanceof AiOutputTruncatedError && maxTokens < MAX_OUTPUT_TOKENS) {
+          maxTokens = Math.min(maxTokens * TOKEN_GROWTH, MAX_OUTPUT_TOKENS);
+          this.logger.warn(
+            `AI 输出预算被耗尽（第 ${attempt}/${MAX_ATTEMPTS} 次），放大到 max_tokens=${maxTokens} 再试`,
+          );
+        } else {
+          this.logger.warn(
+            `AI 调用第 ${attempt}/${MAX_ATTEMPTS} 次失败：${describeError(error)}`,
+          );
+        }
 
         if (attempt < MAX_ATTEMPTS) {
           await delay(RETRY_DELAY_MS);
@@ -144,10 +163,21 @@ export class AiService {
     }
 
     const payload = (await response.json()) as ChatCompletionResponse;
-    const content = payload.choices?.[0]?.message?.content;
+    const choice = payload.choices?.[0];
+    const content = choice?.message?.content;
 
     if (typeof content !== 'string' || content.trim().length === 0) {
-      throw new AiUnavailableError('AI 返回内容为空');
+      // finish_reason=length 说明输出额度（含推理模型的思维链）被吃光了，
+      // 这不是上游故障，放大 max_tokens 重试才有意义
+      if (choice?.finish_reason === 'length') {
+        throw new AiOutputTruncatedError(
+          `AI 的输出额度被耗尽（max_tokens=${options.maxTokens ?? DEFAULT_MAX_TOKENS}）`,
+        );
+      }
+
+      throw new AiUnavailableError(
+        `AI 返回了空内容${choice?.finish_reason ? `（finish_reason: ${choice.finish_reason}）` : ''}`,
+      );
     }
 
     return content;

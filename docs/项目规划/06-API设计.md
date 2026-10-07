@@ -22,6 +22,7 @@
 | `GET` | `/api/map` | **个人档案**快照：五类对象 + 关联关系（M2.5 ✅） |
 | `POST` | `/api/map/ingest` | **文本录入 → AI 归类**，返回待确认候选（M2.5 ✅） |
 | `POST` | `/api/map/ingest/pdf` | **上传 PDF（multipart）→ 抽文本 → AI 归类**（M2.5 ✅） |
+| `POST` | `/api/map/ingest/github` | **GitHub 地址 → 读账号资料卡 + 公开仓库 README → AI 归类**（M2.5 ✅） |
 | `POST` | `/api/map/candidates/apply` | 确认候选（可编辑 / 部分确认）落库（M2.5 ✅） |
 | `POST` | `/api/map/focus` | 手动新增关注点（M2.5 ✅；`interest` / `input` / `knowledge` / `skill` 同理） |
 | `PATCH` | `/api/map/:kind/:id` | 更新状态 / 进度（`kind`: focus / interest / input / knowledge / skill，M2.5 ✅） |
@@ -38,4 +39,5 @@
 - 全局 `ValidationPipe`（`whitelist: true`）校验 DTO；全局异常过滤器统一错误格式
 - AI 接口耗时较长：生成任务线走普通请求；评审 / 复盘用 **SSE**（NestJS `@Sse()` 装饰器）流式返回
 - 文件上传（PDF）走 `multipart/form-data`，用 NestJS `FileInterceptor`（Multer 内存存储），限制类型与大小（≤10MB）；解析出的文本仅用于本次 AI 归类，默认不落盘（见[第 13.9 节](./13-成长地图.md)）
+- GitHub 录入（`/api/map/ingest/github`）由后端解析用户填的地址后**只访问 `https://api.github.com`**（防 SSRF），只读账号公开资料卡（overview）与公开仓库、不落盘；限额与可选 `GITHUB_TOKEN` 见[第 13.10 节](./13-成长地图.md)
 - 前端用 `HttpInterceptorFn` 统一处理 baseURL（开发期配合 `proxy.conf.json` 代理）、错误提示与 loading 状态

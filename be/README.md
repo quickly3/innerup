@@ -19,6 +19,8 @@ npm install
 
 - `DATABASE_URL`：PostgreSQL 连接串（Neon/Supabase/Railway）
 - `PORT`：服务端口，默认 `3000`
+- `AI_API_KEY`：档案归类 / 生成任务线用的模型 Key（不填则 AI 功能降级，不报错崩溃）
+- `GITHUB_TOKEN`：**可选**，只用于「GitHub 地址录入」（读账号公开资料卡与公开仓库 README）。不填时未认证额度 60 次/小时、最多读 6 个仓库；填了最多读 12 个仓库
 
 示例参见 `.env.example`。
 
@@ -67,6 +69,10 @@ npm run prisma:studio    # 可视化查看数据
 - 全局异常过滤器 `AllExceptionsFilter` 将任意异常转成统一错误结构。
 - PrismaService：使用 `@prisma/adapter-pg` 创建 `PrismaClient`，并提供 `ping()` 探活方法。
 - 健康检查：`GET /api/health` 返回服务与数据库状态（数据库不可用也返回 200）
+- 个人档案录入（M2.5）：`POST /api/map/ingest`（文本）/ `ingest/pdf`（PDF）/ `ingest/github`（GitHub 账号资料卡 + 公开仓库 README）
+  - 三种入口共用同一条 AI 归类链路，都**只返回候选**，需 `POST /api/map/candidates/apply` 确认落库
+  - GitHub 入口由 `github-url.ts` 解析出 `owner` / `repo`，请求固定打到 `https://api.github.com`（防 SSRF）；资料卡读失败不影响 README 分析；上限见 `src/growth/growth.constants.ts`
+  - 隐私：PDF / 资料卡 / README 都不落盘，日志只记仓库名与字数
 
 ## 常用脚本
 
