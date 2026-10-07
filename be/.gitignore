@@ -1,0 +1,34 @@
+# ── 依赖与构建产物 ──
+/node_modules
+/dist
+/build
+/tmp
+
+# ── 日志 ──
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── 环境变量（含数据库连接串与 AI Key）──
+.env
+.env.local
+.env.*.local
+
+# ── Prisma 生成的客户端（由 `prisma generate` 产出）──
+/src/generated
+
+# ── 测试 ──
+/coverage
+/.nyc_output
+
+# ── 编辑器 / 系统 ──
+/.idea
+/.vscode/*
+!/.vscode/extensions.json
+!/.vscode/launch.json
+!/.vscode/tasks.json
+.DS_Store
+*.swp

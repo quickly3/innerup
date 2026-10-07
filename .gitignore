@@ -1,0 +1,24 @@
+# ── 依赖与产物 ──
+/node_modules
+/fe/node_modules
+/be/node_modules
+/dist
+/fe/dist
+/be/dist
+
+# ── 环境变量（含数据库连接串与 AI Key）──
+.env
+.env.local
+.env.*.local
+/be/.env
+
+# ── Prisma 生成的客户端 ──
+/be/src/generated
+
+# ── 日志 ──
+*.log
+npm-debug.log*
+
+# ── 编辑器 / 系统 ──
+.DS_Store
+Thumbs.db

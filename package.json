@@ -1,0 +1,20 @@
+{
+  "name": "innerup",
+  "version": "0.0.0",
+  "private": true,
+  "description": "InnerUp —— 以 AI 为教练、把「自我提升」游戏化的成长系统",
+  "license": "UNLICENSED",
+  "scripts": {
+    "setup": "npm --prefix be install && npm --prefix fe install",
+    "dev:be": "npm --prefix be run start:dev",
+    "dev:fe": "npm --prefix fe run start",
+    "build": "npm run build:be && npm run build:fe",
+    "build:be": "npm --prefix be run build",
+    "build:fe": "npm --prefix fe run build",
+    "test": "npm run test:be && npm run test:fe",
+    "test:be": "npm --prefix be run test",
+    "test:fe": "npm --prefix fe run test",
+    "db:migrate": "npm --prefix be run prisma:migrate",
+    "db:studio": "npm --prefix be run prisma:studio"
+  }
+}

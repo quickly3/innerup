@@ -1,0 +1,85 @@
+<section class="dashboard">
+  <header class="hero">
+    <p class="hero__eyebrow">M1 · 脚手架跑通</p>
+    <h1 class="hero__title">把「我想变得更好」<br />变成一款可玩的 RPG</h1>
+    <p class="hero__subtitle">
+      这里最终会是你的角色面板：等级、经验值、技能雷达图与今日任务。
+      现在先确认前后端与数据库已经接上。
+    </p>
+  </header>
+
+  <mat-card appearance="outlined" class="panel">
+    <mat-card-header>
+      <mat-card-title>环境自检</mat-card-title>
+      <mat-card-subtitle>前端 → 后端 → 数据库</mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      @if (loading()) {
+        <p class="row row--muted">
+          <mat-progress-spinner mode="indeterminate" [diameter]="18" />
+          <span>正在检查后端…</span>
+        </p>
+      } @else if (error(); as message) {
+        <p class="row row--error">
+          <mat-icon fontSet="material-symbols-outlined">error</mat-icon>
+          <span>{{ message }}</span>
+        </p>
+      } @else if (health(); as status) {
+        <ul class="checks">
+          <li class="check">
+            <mat-icon fontSet="material-symbols-outlined" class="check__icon check__icon--ok">
+              check_circle
+            </mat-icon>
+            <span class="check__label">后端 API</span>
+            <span class="check__value">已连通 · 已运行 {{ status.uptime }} 秒</span>
+          </li>
+
+          <li class="check">
+            @if (status.database === 'up') {
+              <mat-icon fontSet="material-symbols-outlined" class="check__icon check__icon--ok">
+                check_circle
+              </mat-icon>
+              <span class="check__label">PostgreSQL</span>
+              <span class="check__value">已连接</span>
+            } @else {
+              <mat-icon fontSet="material-symbols-outlined" class="check__icon check__icon--warn">
+                warning
+              </mat-icon>
+              <span class="check__label">PostgreSQL</span>
+              <span class="check__value">
+                未连接 —— 请在 <code>be/.env</code> 填写
+                <code>DATABASE_URL</code> 后重启后端
+              </span>
+            }
+          </li>
+        </ul>
+      }
+    </mat-card-content>
+
+    <mat-card-actions>
+      <button matButton type="button" (click)="refresh()" [disabled]="loading()">
+        <mat-icon fontSet="material-symbols-outlined">refresh</mat-icon>
+        重新检查
+      </button>
+    </mat-card-actions>
+  </mat-card>
+
+  <mat-card appearance="outlined" class="panel">
+    <mat-card-header>
+      <mat-card-title>接下来</mat-card-title>
+      <mat-card-subtitle>按《项目规划》第 9 节的里程碑推进</mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      <ol class="roadmap">
+        <li><strong>M2</strong> 数据与骨架：迁移落库、路由骨架、Swagger</li>
+        <li><strong>M3</strong> 目标与任务：Goal / Quest 的 CRUD 与页面</li>
+        <li><strong>M4</strong> AI 生成任务线：<code>AiModule</code> + 结构化输出</li>
+        <li><strong>M5</strong> 打卡与成长：XP、等级、streak、热力图</li>
+        <li><strong>M6</strong> AI 评审：打卡后即时反馈（SSE 流式）</li>
+        <li><strong>M7</strong> 打磨与部署</li>
+      </ol>
+    </mat-card-content>
+  </mat-card>
+</section>
