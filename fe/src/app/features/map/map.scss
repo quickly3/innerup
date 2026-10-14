@@ -78,6 +78,13 @@
   flex-wrap: wrap;
   gap: 12px;
 
+  /* 拖拽悬停高亮，让「可以直接拖进来」看得见 */
+  &--over {
+    border-radius: 12px;
+    outline: 2px dashed var(--mat-sys-primary);
+    outline-offset: 4px;
+  }
+
   &__input {
     display: none;
   }
@@ -267,6 +274,12 @@
     background: var(--mat-sys-surface-container-high);
   }
 
+  /* 手动新增入口：AI 失败时的降级路径（第 13.9 节） */
+  &__add {
+    margin-left: auto;
+    font-size: 0.8rem;
+  }
+
   &__empty {
     margin: 0;
     padding: 12px;
@@ -282,6 +295,30 @@
     margin: 0;
     padding: 0;
     list-style: none;
+  }
+}
+
+/* 手动新增的内联表单：一个输入框 + 确认 / 取消 */
+.manual {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+
+  &__input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--mat-sys-outline-variant);
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+
+    &:focus {
+      border-color: var(--mat-sys-primary);
+      outline: none;
+    }
   }
 }
 
@@ -354,6 +391,27 @@
     background: var(--mat-sys-surface-container-high);
 
     &:focus {
+      outline: none;
+    }
+  }
+}
+
+/* 「补一句收获」的提示条：多一个输入框与两个按钮，横向排开、窄屏换行 */
+.outlet {
+  flex-wrap: wrap;
+
+  &__input {
+    flex: 1 1 260px;
+    min-width: 0;
+    padding: 6px 8px;
+    border: 1px solid var(--mat-sys-outline-variant);
+    border-radius: 8px;
+    background: var(--mat-sys-surface);
+    color: inherit;
+    font: inherit;
+
+    &:focus {
+      border-color: var(--mat-sys-primary);
       outline: none;
     }
   }

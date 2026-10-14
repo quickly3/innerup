@@ -1,0 +1,149 @@
+:host {
+  display: block;
+}
+
+.quest {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 12px;
+  background: var(--mat-sys-surface);
+
+  &--done {
+    opacity: 0.7;
+
+    .quest__title {
+      text-decoration: line-through;
+    }
+  }
+
+  &__head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__status {
+    width: 104px;
+    font-size: 0.85rem;
+  }
+
+  &__title {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 8px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    font: var(--mat-sys-body-large);
+
+    &:hover,
+    &:focus {
+      border-color: var(--mat-sys-outline-variant);
+      background: var(--mat-sys-surface-container-low);
+      outline: none;
+    }
+  }
+
+  &__spacer {
+    flex: 0 0 4px;
+  }
+
+  &__meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 0.85rem;
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  &__goal {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--mat-sys-primary);
+    text-decoration: none;
+
+    mat-icon {
+      font-size: 1rem;
+      width: 1rem;
+      height: 1rem;
+    }
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  &__kind {
+    width: 108px;
+    font-size: 0.85rem;
+
+    mat-icon {
+      font-size: 1.05rem;
+      width: 1.05rem;
+      height: 1.05rem;
+      margin-right: 4px;
+      color: var(--mat-sys-on-surface-variant);
+    }
+  }
+
+  &__num {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+
+    input {
+      width: 48px;
+      padding: 4px 6px;
+      border: 1px solid var(--mat-sys-outline-variant);
+      border-radius: 8px;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      text-align: center;
+
+      &:focus {
+        border-color: var(--mat-sys-primary);
+        outline: none;
+      }
+    }
+  }
+
+  &__due-edit {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    white-space: nowrap;
+
+    > mat-icon {
+      font-size: 1rem;
+      width: 1rem;
+      height: 1rem;
+    }
+
+    input[type='date'] {
+      padding: 4px 6px;
+      border: 1px solid var(--mat-sys-outline-variant);
+      border-radius: 8px;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      font-size: 0.8rem;
+
+      &:focus {
+        border-color: var(--mat-sys-primary);
+        outline: none;
+      }
+    }
+  }
+
+  &__due-hint {
+    color: var(--mat-sys-outline);
+    font-size: 0.75rem;
+  }
+}

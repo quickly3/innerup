@@ -69,6 +69,19 @@ npm run prisma:studio    # 可视化查看数据
 - 全局异常过滤器 `AllExceptionsFilter` 将任意异常转成统一错误结构。
 - PrismaService：使用 `@prisma/adapter-pg` 创建 `PrismaClient`，并提供 `ping()` 探活方法。
 - 健康检查：`GET /api/health` 返回服务与数据库状态（数据库不可用也返回 200）
+- 目标与任务（M3）：`src/goals`（`Goal` CRUD，列表带回 `questCounts`）与 `src/quests`（`Quest` CRUD）
+  - 任务归属靠 `Quest.goal → Goal.userId` 判断，业务层不信任请求里的 `goalId`
+  - 列表：`GET /api/quests` 是标准分页体 `data = { records, pagination: { page, pageSize, total } }`；`GET /api/goals` 是数组
+  - `?date=today` = 今天到期 + 正在做 + 逾期未完成（`Quest` 没有 `updatedAt`，见规划第 7 节）
+  - 排序：`Quest` 没有创建时间列，按 `order` 升序、并列用 `id` 兜底；手动创建时 `order` 按 10 递增
+  - `PATCH` 传空 body 会 400（不静默忽略）；跨模块共用的 Prisma 小工具在 `src/common/prisma-utils.ts`
+- AI 生成任务线（M4）：`POST /api/goals/:id/generate` → `src/goals/quest-plan.service.ts`
+  - 一次 `AiService.completeJson()` 生成 3~7 条任务（输入 / 练习 / 产出交替）并**直接落库**（不走候选确认）
+  - 生成依据是 `GrowthService.questPlanSummary()`：比归类用的摘要**多带状态 / 进度 / 等级**，每类最多 20 条、单条 60 字
+  - `mode=append` 追加到末尾；`mode=replace` 先删该目标下 `status='todo'` 的任务再写入（在做 / 已完成与打卡保留）；两者都在一个事务里完成
+  - `acceptance` 不建列，落库时并进 `Quest.description`；AI 建议的目标标题只回传 `suggestedTitle`，由前端确认后才 `PATCH /api/goals/:id`
+  - **AI 不可用不报错**：`AiUnavailableError` 由 service 捕获后改用 `quest-plan.template.ts` 的通用模板兜底（第 8.2 节），响应带 `source: 'template'`；schema 宽容解析但**一条任务都不合格就算失败**，不落库半条任务线
+  - 提示词 `src/ai/prompts/generate-quests.prompt.ts`；Zod 契约 `src/ai/schemas/generate-quests.schema.ts`；两个调用点公用的归一化工具在 `src/ai/schemas/schema-helpers.ts`
 - 个人档案录入（M2.5）：`POST /api/map/ingest`（文本）/ `ingest/pdf`（PDF）/ `ingest/github`（GitHub 账号资料卡 + 公开仓库 README）
   - 三种入口共用同一条 AI 归类链路，都**只返回候选**，需 `POST /api/map/candidates/apply` 确认落库
   - GitHub 入口由 `github-url.ts` 解析出 `owner` / `repo`，请求固定打到 `https://api.github.com`（防 SSRF）；资料卡读失败不影响 README 分析；上限见 `src/growth/growth.constants.ts`

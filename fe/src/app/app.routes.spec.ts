@@ -3,12 +3,13 @@ import { routes } from './app.routes';
 /** M2 的页面路由（全部懒加载）。 */
 const pageRoutes = routes.filter((route) => route.loadComponent);
 
-describe('app routes (M2 骨架)', () => {
+describe('app routes (M2 骨架 / M3 目标与任务)', () => {
   it('should contain the route skeleton', () => {
     expect(routes.map((route) => route.path)).toEqual([
       '',
       'dashboard',
       'goals',
+      'goals/:id',
       'quests',
       'map',
       'profile',
@@ -21,6 +22,7 @@ describe('app routes (M2 骨架)', () => {
     expect(pageRoutes.map((route) => route.path)).toEqual([
       'dashboard',
       'goals',
+      'goals/:id',
       'quests',
       'map',
       'profile',

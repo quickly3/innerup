@@ -12,7 +12,9 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import type { Observable } from 'rxjs';
 
+import { describeHttpError } from '../../core/api/http-error';
 import {
   EMPTY_RESULT_HINT,
   INPUT_KIND_LABELS,
@@ -92,11 +94,15 @@ export class MapPage {
   protected readonly statusLabels = STATUS_LABELS;
   protected readonly inputKindLabels = INPUT_KIND_LABELS;
   protected readonly allKinds = ALL_KINDS;
+  protected readonly manualPlaceholders = MANUAL_PLACEHOLDERS;
 
   // ── 录入区
   protected readonly text = signal('');
   protected readonly pdfName = signal<string | null>(null);
   protected readonly pdfChars = signal<number | null>(null);
+  /** 选中的 PDF：拖拽与点击选择都写到这里，上传时直接用（不再回 DOM 里捞）。 */
+  protected readonly pdfFile = signal<File | null>(null);
+  protected readonly pdfDragging = signal(false);
   protected readonly githubUrl = signal('');
   protected readonly githubInfo = signal<string | null>(null);
   protected readonly ingesting = signal(false);
@@ -120,10 +126,28 @@ export class MapPage {
     null,
   );
   protected readonly saving = signal<string | null>(null);
+  /** 手动新增哪一类（null = 没在新增）。 */
+  protected readonly manualKind = signal<MapKind | null>(null);
+  protected readonly manualLabel = signal('');
+  protected readonly manualSaving = signal(false);
+  /**
+   * 输入标记「读完」却没有消化出口时的提醒（第 13.3 节的硬要求）。
+   *
+   * 提示里带一个「补一句收获」的输入框——不给出可操作的补救路径，提示就只是噪音。
+   */
+  protected readonly outletNotice = signal<{ id: string; label: string } | null>(null);
+  protected readonly outletDraft = signal('');
+  protected readonly outletSaving = signal(false);
 
   protected readonly selectedCount = computed(
     () => this.candidates().filter((row) => row.selected).length,
   );
+
+  protected readonly allSelected = computed(() => {
+    const rows = this.candidates();
+
+    return rows.length > 0 && rows.every((row) => row.selected);
+  });
 
   protected readonly confidenceLevels = [1, 2, 3, 4, 5] as const;
 
@@ -141,32 +165,70 @@ export class MapPage {
   protected onPdfSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0] ?? null;
+
+    if (!file) {
+      this.clearPdfState();
+      return;
+    }
+
+    this.acceptPdf(file, () => (input.value = ''));
+  }
+
+  /** 拖拽上传（第 13.9 节：点击或拖拽都可以）。 */
+  protected onPdfDrop(event: DragEvent): void {
+    event.preventDefault();
+    this.pdfDragging.set(false);
+
+    this.acceptPdf(event.dataTransfer?.files?.[0] ?? null);
+  }
+
+  protected onPdfDragOver(event: DragEvent): void {
+    event.preventDefault();
+    this.pdfDragging.set(true);
+  }
+
+  protected onPdfDragLeave(): void {
+    this.pdfDragging.set(false);
+  }
+
+  /** 选中 / 拖入一份 PDF：类型与大小先在前端拦一次，避免白跑一趟上传。 */
+  private acceptPdf(file: File | null, resetInput?: () => void): void {
     this.ingestError.set(null);
 
     if (!file) {
-      this.pdfName.set(null);
-      this.pdfChars.set(null);
+      this.clearPdfState();
+      return;
+    }
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      this.ingestError.set('只支持 PDF 文件');
+      resetInput?.();
       return;
     }
     if (file.size > MAX_PDF_BYTES) {
       this.ingestError.set('PDF 不能超过 10MB');
-      input.value = '';
+      resetInput?.();
       return;
     }
 
+    this.pdfFile.set(file);
     this.pdfName.set(file.name);
+    this.pdfChars.set(null);
+  }
+
+  private clearPdfState(): void {
+    this.pdfFile.set(null);
+    this.pdfName.set(null);
     this.pdfChars.set(null);
   }
 
   protected clearPdf(event: Event): void {
     event.stopPropagation();
-    this.pdfName.set(null);
-    this.pdfChars.set(null);
+    this.clearPdfState();
     this.ingestError.set(null);
   }
 
   protected ingest(): void {
-    const pdf = this.pdfName();
+    const pdf = this.pdfFile();
     const text = this.text().trim();
 
     if (pdf) {
@@ -188,7 +250,7 @@ export class MapPage {
       next: (result) => this.onIngested(result),
       error: (error: unknown) => {
         this.ingesting.set(false);
-        this.ingestError.set(describeError(error));
+        this.ingestError.set(describeHttpError(error));
       },
     });
   }
@@ -215,14 +277,13 @@ export class MapPage {
       },
       error: (error: unknown) => {
         this.ingesting.set(false);
-        this.ingestError.set(describeError(error));
+        this.ingestError.set(describeHttpError(error));
       },
     });
   }
 
   private ingestPdf(): void {
-    const input = document.querySelector<HTMLInputElement>('#map-pdf-input');
-    const file = input?.files?.[0];
+    const file = this.pdfFile();
 
     if (!file) {
       this.ingestError.set('请先选择一份 PDF');
@@ -241,7 +302,7 @@ export class MapPage {
       },
       error: (error: unknown) => {
         this.ingesting.set(false);
-        this.ingestError.set(describeError(error));
+        this.ingestError.set(describeHttpError(error));
       },
     });
   }
@@ -317,6 +378,16 @@ export class MapPage {
     row.selected = checked;
   }
 
+  /** 全部确认 / 全部取消（第 13.9 节：「全部确认」与「逐条确认」都要能走）。 */
+  protected toggleAllRows(): void {
+    const next = !this.allSelected();
+
+    for (const row of this.candidates()) {
+      row.selected = next;
+    }
+    this.candidates.set([...this.candidates()]);
+  }
+
   protected removeRow(row: CandidateRow): void {
     this.candidates.set(this.candidates().filter((item) => item !== row));
     this.emptyResult.set(this.candidates().length === 0);
@@ -386,7 +457,7 @@ export class MapPage {
       },
       error: (error: unknown) => {
         this.applying.set(false);
-        this.ingestError.set(describeError(error));
+        this.ingestError.set(describeHttpError(error));
       },
     });
   }
@@ -405,7 +476,7 @@ export class MapPage {
       },
       error: (error: unknown) => {
         this.loadingSnapshot.set(false);
-        this.snapshotError.set(describeError(error));
+        this.snapshotError.set(describeHttpError(error));
       },
     });
   }
@@ -439,6 +510,7 @@ export class MapPage {
       if (item['progress']) parts.push(String(item['progress']));
       if (Number(item['minutes']) > 0) parts.push(`${item['minutes']} 分钟`);
       if (item['takeaway']) parts.push(`收获：${item['takeaway']}`);
+      else if (this.outletCount(item.id) > 0) parts.push('消化出口：知识条目');
       else parts.push('⚠ 还没有消化出口');
     } else if (kind === 'knowledge') {
       if (item['topic']) parts.push(String(item['topic']));
@@ -456,6 +528,26 @@ export class MapPage {
     return parts.join(' · ');
   }
 
+  /**
+   * 这条输入产出了几条知识（第 13.3 节：消化出口 = 一句话收获**或**一条知识条目）。
+   * 快照里两者都在，所以在浏览器端算就够，不用为它单独加接口。
+   */
+  private outletCount(inputId: string): number {
+    const knowledge = (this.snapshot()?.knowledge ?? []) as unknown as SnapshotItem[];
+
+    return knowledge.filter((item) => item['sourceInputId'] === inputId).length;
+  }
+
+  /** 有没有消化出口：一句话收获，或至少产出一条知识。 */
+  private hasOutlet(item: SnapshotItem): boolean {
+    const takeaway = item['takeaway'];
+
+    return (
+      (typeof takeaway === 'string' && takeaway.trim().length > 0) ||
+      this.outletCount(String(item['id'])) > 0
+    );
+  }
+
   protected statusOf(item: SnapshotItem): string | null {
     const status = item['status'];
     return typeof status === 'string' && status in STATUS_LABELS
@@ -471,7 +563,104 @@ export class MapPage {
   }
 
   protected changeStatus(kind: MapKind, id: string, status: string): void {
+    this.outletNotice.set(null);
+
+    // 第 13.3 节：输入标记「读完」却没有消化出口时，明确提示而不是静默放过
+    if (kind === 'input' && status === 'finished') {
+      const item = this.itemsOf('input').find((row) => row['id'] === id);
+
+      if (item && !this.hasOutlet(item)) {
+        this.outletDraft.set('');
+        this.outletNotice.set({ id, label: this.labelOf('input', item) });
+      }
+    }
+
     this.save(kind, id, { status });
+  }
+
+  /** 提示里的「补一句收获」：直接 PATCH `takeaway`，这条输入就算有了消化出口。 */
+  protected saveOutlet(): void {
+    const notice = this.outletNotice();
+    const takeaway = this.outletDraft().trim();
+
+    if (!notice) return;
+
+    if (takeaway.length === 0) {
+      this.snapshotError.set('先写一句收获，或者让它产出一条知识条目');
+      return;
+    }
+
+    this.outletSaving.set(true);
+
+    this.mapService.update('input', notice.id, { takeaway }).subscribe({
+      next: () => {
+        this.outletSaving.set(false);
+        this.outletNotice.set(null);
+        this.outletDraft.set('');
+        this.refreshSnapshot();
+      },
+      error: (error: unknown) => {
+        this.outletSaving.set(false);
+        this.snapshotError.set(describeHttpError(error));
+      },
+    });
+  }
+
+  protected dismissOutlet(): void {
+    this.outletNotice.set(null);
+    this.outletDraft.set('');
+  }
+
+  // ── 手动新增（第 13.9 节：AI 失败时的降级入口，五类各一个「＋ 手动新增」）
+
+  protected startManualAdd(kind: MapKind): void {
+    this.manualKind.set(kind);
+    this.manualLabel.set('');
+    this.snapshotError.set(null);
+  }
+
+  protected cancelManualAdd(): void {
+    this.manualKind.set(null);
+    this.manualLabel.set('');
+  }
+
+  protected submitManualAdd(): void {
+    const kind = this.manualKind();
+    const label = this.manualLabel().trim();
+
+    if (!kind) return;
+
+    if (label.length === 0) {
+      this.snapshotError.set(`先写一句${KIND_LABELS[kind]}内容`);
+      return;
+    }
+
+    const payload = { [MANUAL_FIELDS[kind]]: label } as Record<string, unknown>;
+    // 五类返回不同的实体类型，统一收敛成 Observable<unknown> 再订阅
+    const request: Observable<unknown> =
+      kind === 'focus'
+        ? this.mapService.createFocus(payload)
+        : kind === 'interest'
+          ? this.mapService.createInterest(payload)
+          : kind === 'input'
+            ? this.mapService.createInput(payload)
+            : kind === 'knowledge'
+              ? this.mapService.createKnowledge(payload)
+              : this.mapService.createSkill(payload);
+
+    this.manualSaving.set(true);
+
+    request.subscribe({
+      next: () => {
+        this.manualSaving.set(false);
+        this.cancelManualAdd();
+        this.refreshSnapshot();
+      },
+      error: (error: unknown) => {
+        this.manualSaving.set(false);
+        this.snapshotError.set(describeHttpError(error));
+      },
+    });
   }
 
   protected startEdit(kind: MapKind, id: string, current: string): void {
@@ -514,7 +703,7 @@ export class MapPage {
       },
       error: (error: unknown) => {
         this.saving.set(null);
-        this.snapshotError.set(describeError(error));
+        this.snapshotError.set(describeHttpError(error));
       },
     });
   }
@@ -530,7 +719,7 @@ export class MapPage {
       },
       error: (error: unknown) => {
         this.saving.set(null);
-        this.snapshotError.set(describeError(error));
+        this.snapshotError.set(describeHttpError(error));
       },
     });
   }
@@ -540,17 +729,23 @@ const FOCUS_STATUS_VALUES = ['active', 'cooling', 'archived'];
 const INTEREST_STATUS_VALUES = ['curious', 'trying', 'ongoing', 'cool', 'dropped'];
 const INPUT_STATUS_VALUES = ['queued', 'consuming', 'finished', 'dropped'];
 
-function describeError(error: unknown): string {
-  const httpError = error as { status?: number; error?: { message?: string }; message?: string };
+/** 手动新增时每类的必填字段：其余字段用后端默认值，之后再改（第 13.8 节）。 */
+const MANUAL_FIELDS: Record<MapKind, string> = {
+  focus: 'title',
+  interest: 'name',
+  input: 'title',
+  knowledge: 'statement',
+  skill: 'name',
+};
 
-  if (httpError?.error?.message) {
-    return httpError.error.message;
-  }
-  if (httpError?.message) {
-    return httpError.message;
-  }
-  return '出了点问题，请稍后再试';
-}
+/** 手动新增输入框的占位提示，按类给出例子。 */
+const MANUAL_PLACEHOLDERS: Record<MapKind, string> = {
+  focus: '例如：想转岗做数据',
+  interest: '例如：弹吉他',
+  input: '例如：《数据分析实战》',
+  knowledge: '例如：留存率要按同期群拆开看',
+  skill: '例如：能独立拉出漏斗查询',
+};
 
 /** 告诉用户「读了资料卡与哪些仓库」，让他知道 AI 的判断基于什么。 */
 function describeGithubImport(meta: GithubIngestMeta | undefined): string | null {

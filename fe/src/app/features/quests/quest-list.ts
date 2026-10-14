@@ -1,28 +1,133 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { MatButtonModule } from '@angular/material/button';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
+import { MatCardModule } from '@angular/material/card';
+import { MatIconModule } from '@angular/material/icon';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { FormsModule } from '@angular/forms';
 
-import { PagePlaceholder } from '../../shared/page-placeholder/page-placeholder';
+import { describeHttpError } from '../../core/api/http-error';
+import {
+  GoalService,
+  QuestService,
+  QUEST_STATUS_LABELS,
+  QUEST_STATUSES,
+  type GoalWithCounts,
+  type Quest,
+  type QuestPayload,
+  type QuestStatus,
+} from '../../core/api/goal.service';
+import { QuestCard } from '../../shared/quest-card/quest-card';
+
+type Scope = 'today' | 'all';
+type Filter = QuestStatus | 'all';
 
 /**
- * 任务列表（含今日任务）。M2 占位，M3 实现列表，M5 加打卡与 XP。
+ * 任务列表（M3）：跨任务线看任务，支持「今日 / 全部」与状态筛选。
+ *
+ * 打卡、XP 结算与热力图在 M5；导入或编辑任务在目标详情页。
  */
 @Component({
   selector: 'app-quest-list',
-  imports: [PagePlaceholder],
-  template: `
-    <app-page-placeholder
-      icon="task_alt"
-      title="任务"
-      milestone="M3 目标与任务"
-      description="今日任务与全部任务的列表。完成任务后打卡，记录投入时长与总结，并拿到经验值。"
-      [planned]="planned"
-    />
-  `,
+  imports: [
+    FormsModule,
+    QuestCard,
+    MatButtonModule,
+    MatButtonToggleModule,
+    MatCardModule,
+    MatIconModule,
+    MatProgressSpinnerModule,
+  ],
+  templateUrl: './quest-list.html',
+  styleUrl: './quest-list.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class QuestList {
-  protected readonly planned: readonly string[] = [
-    '任务列表，支持 ?date=today 只看今天',
-    '状态流转：todo → doing → done',
-    'M5 起：打卡记录、XP 结算与连续天数',
-  ];
+  private readonly questService = inject(QuestService);
+  private readonly goalService = inject(GoalService);
+
+  protected readonly statuses = QUEST_STATUSES;
+  protected readonly statusLabels = QUEST_STATUS_LABELS;
+  protected readonly scopes: Scope[] = ['today', 'all'];
+  protected readonly filters: Filter[] = ['all', ...QUEST_STATUSES];
+
+  protected readonly scope = signal<Scope>('today');
+  protected readonly filter = signal<Filter>('all');
+
+  protected readonly records = signal<Quest[]>([]);
+  protected readonly total = signal(0);
+  protected readonly goalTitles = signal<Record<string, string>>({});
+  protected readonly loading = signal(false);
+  protected readonly error = signal<string | null>(null);
+
+  protected readonly doneCount = computed(
+    () => this.records().filter((quest) => quest.status === 'done').length,
+  );
+
+  constructor() {
+    this.loadGoals();
+    this.refresh();
+  }
+
+  protected changeScope(scope: Scope): void {
+    this.scope.set(scope);
+    this.refresh();
+  }
+
+  protected changeFilter(filter: Filter): void {
+    this.filter.set(filter);
+    this.refresh();
+  }
+
+  protected refresh(): void {
+    this.loading.set(true);
+    this.error.set(null);
+
+    const filter = this.filter();
+
+    this.questService
+      .list({
+        ...(this.scope() === 'today' ? { date: 'today' as const } : {}),
+        ...(filter === 'all' ? {} : { status: filter }),
+      })
+      .subscribe({
+        next: (result) => {
+          this.records.set(result.records);
+          this.total.set(result.pagination.total);
+          this.loading.set(false);
+        },
+        error: (error: unknown) => {
+          this.loading.set(false);
+          this.error.set(describeHttpError(error));
+        },
+      });
+  }
+
+  protected saveQuest(questId: string, payload: QuestPayload): void {
+    this.questService.update(questId, payload).subscribe({
+      next: () => this.refresh(),
+      error: (error: unknown) => this.error.set(describeHttpError(error)),
+    });
+  }
+
+  protected removeQuest(quest: Quest): void {
+    if (!window.confirm(`确定删除任务「${quest.title}」吗？`)) return;
+
+    this.questService.remove(quest.id).subscribe({
+      next: () => this.refresh(),
+      error: (error: unknown) => this.error.set(describeHttpError(error)),
+    });
+  }
+
+  /** 任务所属目标的名字，用于跨任务线列表；拿不到就退化成「目标」入口。 */
+  private loadGoals(): void {
+    this.goalService.list().subscribe({
+      next: (goals) => this.goalTitles.set(toTitleMap(goals)),
+      error: () => this.goalTitles.set({}),
+    });
+  }
+}
+
+function toTitleMap(goals: GoalWithCounts[]): Record<string, string> {
+  return Object.fromEntries(goals.map((goal) => [goal.id, goal.title]));
 }

@@ -1,0 +1,138 @@
+<section class="goal-page">
+  <header class="hero">
+    <p class="hero__eyebrow">M3 · 目标与任务</p>
+    <h1 class="hero__title">你想提升什么？</h1>
+    <p class="hero__subtitle">
+      一个目标就是一条任务线。先写下想达成的事，再（手动或之后交给 AI）把它拆成若干任务；
+      任务线要「输入」与「产出」交替，别只读不练。
+    </p>
+  </header>
+
+  <mat-card appearance="outlined" class="panel">
+    <mat-card-header>
+      <mat-card-title>我的目标</mat-card-title>
+      <mat-card-subtitle>
+        共 {{ totals().goals }} 条任务线 · {{ totals().quests }} 个任务 · 已完成
+        {{ totals().done }} 个
+      </mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      <div class="toolbar">
+        <button mat-flat-button type="button" (click)="toggleCreate()">
+          <mat-icon fontSet="material-symbols-outlined">
+            {{ creating() ? 'close' : 'add' }}
+          </mat-icon>
+          {{ creating() ? '取消' : '新建目标' }}
+        </button>
+
+        <button matButton type="button" [disabled]="loading()" (click)="refresh()">
+          <mat-icon fontSet="material-symbols-outlined">refresh</mat-icon>
+          刷新
+        </button>
+      </div>
+
+      @if (creating()) {
+        <div class="create">
+          <mat-form-field appearance="outline" class="create__title">
+            <mat-label>想达成什么</mat-label>
+            <input
+              matInput
+              maxlength="120"
+              [value]="title()"
+              (input)="title.set(titleInput.value)"
+              placeholder="例如：学会弹吉他"
+              #titleInput
+              (keydown.enter)="createGoal()"
+            />
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="create__desc">
+            <mat-label>补充说明（可选）</mat-label>
+            <input
+              matInput
+              maxlength="1000"
+              [value]="description()"
+              (input)="description.set(descInput.value)"
+              placeholder="为什么想做 / 想达成什么程度"
+              #descInput
+              (keydown.enter)="createGoal()"
+            />
+          </mat-form-field>
+
+          <button mat-flat-button type="button" [disabled]="saving()" (click)="createGoal()">
+            @if (saving()) {
+              <mat-progress-spinner mode="indeterminate" [diameter]="16" />
+              创建中…
+            } @else {
+              <ng-container>
+                <mat-icon fontSet="material-symbols-outlined">check</mat-icon>
+                创建
+              </ng-container>
+            }
+          </button>
+        </div>
+      }
+
+      @if (error(); as message) {
+        <p class="notice notice--error">
+          <mat-icon fontSet="material-symbols-outlined">error</mat-icon>
+          <span>{{ message }}</span>
+        </p>
+      }
+
+      @if (loading()) {
+        <p class="notice notice--muted">
+          <mat-progress-spinner mode="indeterminate" [diameter]="18" />
+          正在加载…
+        </p>
+      } @else if (list().length === 0) {
+        <p class="notice notice--muted">
+          <mat-icon fontSet="material-symbols-outlined">flag</mat-icon>
+          <span>还没有目标。点「新建目标」写下第一件想做的事。</span>
+        </p>
+      } @else {
+        <ul class="goals">
+          @for (goal of list(); track goal.id) {
+            <li class="goal" [class.goal--busy]="busyId() === goal.id">
+              <div class="goal__head">
+                <a class="goal__title" [routerLink]="['/goals', goal.id]">{{ goal.title }}</a>
+
+                <mat-form-field appearance="outline" class="goal__status" subscriptSizing="dynamic">
+                  <mat-select
+                    [value]="goal.status"
+                    [attr.aria-label]="'目标状态：' + goal.title"
+                    (selectionChange)="changeStatus(goal, $event.value)"
+                  >
+                    @for (status of statuses; track status) {
+                      <mat-option [value]="status">{{ statusLabels[status] }}</mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+
+                <button mat-icon-button type="button" aria-label="删除目标" (click)="remove(goal)">
+                  <mat-icon fontSet="material-symbols-outlined">delete</mat-icon>
+                </button>
+              </div>
+
+              @if (goal.description) {
+                <p class="goal__desc">{{ goal.description }}</p>
+              }
+
+              <div class="goal__progress">
+                <mat-progress-bar
+                  mode="determinate"
+                  [value]="progressOf(goal)"
+                  [attr.aria-label]="goal.title + ' 的任务进度'"
+                />
+                <span class="goal__counts">
+                  {{ goal.questCounts.done }} / {{ goal.questCounts.total }} 个任务
+                </span>
+              </div>
+            </li>
+          }
+        </ul>
+      }
+    </mat-card-content>
+  </mat-card>
+</section>

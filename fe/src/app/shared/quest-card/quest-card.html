@@ -1,0 +1,144 @@
+<li class="quest" [class.quest--done]="quest().status === 'done'">
+  <div class="quest__head">
+    <mat-form-field appearance="outline" class="quest__status" subscriptSizing="dynamic">
+      <mat-select
+        [value]="quest().status"
+        [attr.aria-label]="'任务状态：' + quest().title"
+        (selectionChange)="changed.emit({ status: $event.value })"
+      >
+        @for (status of statuses; track status) {
+          <mat-option [value]="status">{{ statusLabels[status] }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <input
+      class="quest__title"
+      [value]="quest().title"
+      [attr.aria-label]="'任务标题：' + quest().title"
+      (change)="commitTitle(titleInput)"
+      #titleInput
+    />
+
+    <span class="quest__spacer"></span>
+
+    @if (sortable()) {
+      <button
+        mat-icon-button
+        type="button"
+        aria-label="上移"
+        [disabled]="!canMoveUp()"
+        (click)="moved.emit(-1)"
+      >
+        <mat-icon fontSet="material-symbols-outlined">arrow_upward</mat-icon>
+      </button>
+      <button
+        mat-icon-button
+        type="button"
+        aria-label="下移"
+        [disabled]="!canMoveDown()"
+        (click)="moved.emit(1)"
+      >
+        <mat-icon fontSet="material-symbols-outlined">arrow_downward</mat-icon>
+      </button>
+    }
+
+    <button mat-icon-button type="button" aria-label="删除任务" (click)="removed.emit()">
+      <mat-icon fontSet="material-symbols-outlined">delete</mat-icon>
+    </button>
+  </div>
+
+  <div class="quest__meta">
+    @if (goalTitle(); as goal) {
+      <a class="quest__goal" [routerLink]="['/goals', quest().goalId]">
+        <mat-icon fontSet="material-symbols-outlined">flag</mat-icon>
+        {{ goal }}
+      </a>
+    }
+
+    <mat-form-field appearance="outline" class="quest__kind" subscriptSizing="dynamic">
+      <mat-icon
+        matPrefix
+        fontSet="material-symbols-outlined"
+        [matTooltip]="kindHints[quest().kind]"
+      >
+        {{ kindIcons[quest().kind] }}
+      </mat-icon>
+      <mat-select
+        [value]="quest().kind"
+        [attr.aria-label]="'任务类型：' + quest().title"
+        (selectionChange)="changed.emit({ kind: $event.value })"
+      >
+        @for (kind of kinds; track kind) {
+          <mat-option [value]="kind" [matTooltip]="kindHints[kind]">
+            {{ kindLabels[kind] }}
+          </mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <label class="quest__num">
+      难度
+      <input
+        type="number"
+        min="1"
+        max="5"
+        [value]="quest().difficulty"
+        [attr.aria-label]="'难度：' + quest().title"
+        (change)="commitNumber('difficulty', difficultyInput)"
+        #difficultyInput
+      />
+    </label>
+
+    <label class="quest__num">
+      XP
+      <input
+        type="number"
+        min="0"
+        [value]="quest().xpReward"
+        [attr.aria-label]="'XP 奖励：' + quest().title"
+        (change)="commitNumber('xpReward', xpInput)"
+        #xpInput
+      />
+    </label>
+
+    <label class="quest__num">
+      预计
+      <input
+        type="number"
+        min="0"
+        placeholder="—"
+        [value]="quest().estMinutes ?? ''"
+        [attr.aria-label]="'预计分钟数：' + quest().title"
+        (change)="commitNumber('estMinutes', minutesInput)"
+        #minutesInput
+      />
+      分钟
+    </label>
+
+    <label class="quest__due-edit">
+      <mat-icon fontSet="material-symbols-outlined">event</mat-icon>
+      <input
+        type="date"
+        class="quest__date"
+        [value]="dueDateValue()"
+        [attr.aria-label]="'截止时间：' + quest().title"
+        (change)="commitDueDate(dueInput)"
+        #dueInput
+      />
+      @if (quest().dueDate) {
+        <button
+          mat-icon-button
+          type="button"
+          aria-label="清除截止时间"
+          matTooltip="清除截止时间"
+          (click)="clearDueDate()"
+        >
+          <mat-icon fontSet="material-symbols-outlined">event_busy</mat-icon>
+        </button>
+      } @else {
+        <span class="quest__due-hint" matTooltip="设了截止时间才会进「今日任务」">未排期</span>
+      }
+    </label>
+  </div>
+</li>

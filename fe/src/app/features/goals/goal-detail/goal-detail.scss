@@ -1,0 +1,170 @@
+:host {
+  display: block;
+}
+
+.detail-page {
+  display: grid;
+  gap: 24px;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 0.9rem;
+  text-decoration: none;
+
+  mat-icon {
+    font-size: 1.1rem;
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+
+  &:hover {
+    color: var(--mat-sys-primary);
+  }
+}
+
+.hero {
+  display: grid;
+  gap: 12px;
+
+  &__title {
+    margin: 0;
+    font: var(--mat-sys-headline-medium);
+    letter-spacing: -0.02em;
+  }
+
+  &__subtitle {
+    margin: 0;
+    max-width: 64ch;
+    color: var(--mat-sys-on-surface-variant);
+    line-height: 1.7;
+  }
+
+  &__row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  &__status {
+    width: 104px;
+    font-size: 0.85rem;
+  }
+
+  &__bar {
+    flex: 1;
+    border-radius: 999px;
+  }
+
+  &__counts {
+    font-size: 0.85rem;
+    color: var(--mat-sys-on-surface-variant);
+    white-space: nowrap;
+  }
+}
+
+.panel {
+  border-radius: 16px;
+}
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 0.9rem;
+  line-height: 1.6;
+
+  mat-icon {
+    flex: 0 0 auto;
+    font-size: 1.1rem;
+    width: 1.1rem;
+    height: 1.1rem;
+    margin-top: 2px;
+  }
+
+  &--error {
+    color: var(--mat-sys-error);
+  }
+
+  &--muted {
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  &--warn {
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: var(--mat-sys-surface-container-high);
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  &--ok {
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: var(--mat-sys-primary-container);
+    color: var(--mat-sys-on-primary-container);
+  }
+
+  a {
+    color: inherit;
+    text-decoration: underline;
+  }
+}
+
+.quests {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.add {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 0;
+
+  &__title {
+    flex: 1 1 220px;
+  }
+
+  &__kind {
+    width: 120px;
+  }
+
+  &__desc {
+    flex: 2 1 300px;
+  }
+
+  &__hours {
+    width: 160px;
+  }
+
+  &__mode {
+    width: 200px;
+  }
+}
+
+/* 生成设置里的说明要占满整行，否则会被表单字段挤到旁边 */
+.plan-hint {
+  flex: 1 1 100%;
+}
+
+.plan-result {
+  padding-top: 0;
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--mat-sys-on-surface-variant);
+}

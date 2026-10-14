@@ -54,3 +54,23 @@ export const GITHUB_REQUEST_TIMEOUT_MS = 10_000;
 export function matchKey(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, '');
 }
+
+/**
+ * 档案摘要（喂给生成任务线的 prompt）里的状态中文名。
+ *
+ * 只服务于**提示词可读性**：前端渲染用自己的一份标签（`fe/.../map.service.ts`），
+ * 两边的取值都跟着上面三组状态常量走。`cool` / `cooling` 都是「降温」，所以合并成一张表。
+ */
+export const MAP_STATUS_LABELS: Record<string, string> = {
+  active: '在推进',
+  cooling: '降温',
+  archived: '已归档',
+  curious: '好奇',
+  trying: '在试',
+  ongoing: '持续',
+  cool: '降温',
+  dropped: '放弃',
+  queued: '待读',
+  consuming: '在读',
+  finished: '读完',
+};

@@ -14,6 +14,7 @@ import type {
 } from '../generated/prisma/client.js';
 import { CurrentUserService } from '../common/current-user.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import type { QuestPlanMapSummary } from '../ai/prompts/generate-quests.prompt.js';
 import type { ExistingMapSummary } from '../ai/prompts/map-ingest.prompt.js';
 import type { CandidatesDto } from './dto/candidates.dto.js';
 import type {
@@ -28,6 +29,7 @@ import {
   FOCUS_STATUSES,
   INPUT_STATUSES,
   INTEREST_STATUSES,
+  MAP_STATUS_LABELS,
   MapKind,
   matchKey,
 } from './growth.constants.js';
@@ -50,6 +52,8 @@ export interface ApplyCandidatesResult {
 const DEFAULT_KNOWLEDGE_CONFIDENCE = 3;
 /** 喂给 prompt 的已有条目摘要长度上限，避免把提示词撑爆。 */
 const SUMMARY_TEXT_LIMIT = 60;
+/** 摘要里每类最多带几条（档案可能很长，生成任务线只需要大概画像）。 */
+const SUMMARY_ITEM_LIMIT = 20;
 /** 一次「全部确认」的落库上限，避免交互式事务超时。 */
 const APPLY_TRANSACTION_TIMEOUT_MS = 20_000;
 
@@ -133,8 +137,7 @@ export class GrowthService {
 
   /** 已有档案摘要，喂给归类 prompt，避免重复拆出同样的条目。 */
   async existingSummary(): Promise<ExistingMapSummary> {
-    const { focus, interest, input, knowledge, skill } =
-      await this.snapshot();
+    const { focus, interest, input, knowledge, skill } = await this.snapshot();
 
     return {
       focus: focus.map((item) => item.title),
@@ -142,6 +145,40 @@ export class GrowthService {
       input: input.map((item) => item.title),
       knowledge: knowledge.map((item) => truncate(item.statement)),
       skill: skill.map((item) => item.name),
+    };
+  }
+
+  /**
+   * 生成任务线用的档案摘要（《项目规划》第 13.2 节）。
+   *
+   * 比归类用的摘要多带**状态 / 进度 / 等级**：生成任务线要判断「链条上哪一段是空的」，
+   * 只看条目名字判断不出来（「在读第 3 章」和「读完」对下一步该做什么的影响完全不同）。
+   */
+  async questPlanSummary(): Promise<QuestPlanMapSummary> {
+    const { focus, interest, input, knowledge, skill } = await this.snapshot();
+
+    return {
+      focus: take(focus).map((item) =>
+        withMeta(
+          item.title,
+          MAP_STATUS_LABELS[item.status],
+          `在意 ${item.intensity}/5`,
+        ),
+      ),
+      interest: take(interest).map((item) =>
+        withMeta(item.name, MAP_STATUS_LABELS[item.status]),
+      ),
+      input: take(input).map((item) =>
+        withMeta(
+          truncate(item.title),
+          MAP_STATUS_LABELS[item.status],
+          normalizeText(item.progress) ? `进度 ${item.progress}` : null,
+        ),
+      ),
+      knowledge: take(knowledge).map((item) =>
+        withMeta(truncate(item.statement), `把握 ${item.confidence}/5`),
+      ),
+      skill: take(skill).map((item) => withMeta(item.name, `Lv ${item.level}`)),
     };
   }
 
@@ -379,10 +416,7 @@ export class GrowthService {
     return { created, skipped };
   }
 
-  private async updateFocus(
-    id: string,
-    dto: UpdateMapItemDto,
-  ): Promise<Focus> {
+  private async updateFocus(id: string, dto: UpdateMapItemDto): Promise<Focus> {
     const userId = await this.currentUser.ensureUserId();
     this.assertAllowedFields(MapKind.Focus, dto);
 
@@ -390,13 +424,17 @@ export class GrowthService {
     if (dto.title !== undefined) data.title = dto.title.trim();
     if (dto.why !== undefined) data.why = normalizeText(dto.why);
     if (dto.intensity !== undefined) data.intensity = dto.intensity;
-    if (dto.status !== undefined) data.status = this.assertStatus(dto.status, MapKind.Focus);
+    if (dto.status !== undefined)
+      data.status = this.assertStatus(dto.status, MapKind.Focus);
     if (dto.reviewAt !== undefined) {
       data.reviewAt = parseDateOrNull(dto.reviewAt, 'reviewAt');
     }
 
     return this.runUpdate(
-      this.prisma.focus.update({ where: { id, userId }, data: assertNotEmpty(data) }),
+      this.prisma.focus.update({
+        where: { id, userId },
+        data: assertNotEmpty(data),
+      }),
     );
   }
 
@@ -416,12 +454,16 @@ export class GrowthService {
     if (dto.status !== undefined) {
       data.status = this.assertStatus(dto.status, MapKind.Interest);
     }
-    if (dto.triedWhat !== undefined) data.triedWhat = normalizeText(dto.triedWhat);
+    if (dto.triedWhat !== undefined)
+      data.triedWhat = normalizeText(dto.triedWhat);
     if (dto.color !== undefined) data.color = normalizeText(dto.color);
     if (dto.focusId !== undefined) data.focusId = dto.focusId;
 
     return this.runUpdate(
-      this.prisma.interest.update({ where: { id, userId }, data: assertNotEmpty(data) }),
+      this.prisma.interest.update({
+        where: { id, userId },
+        data: assertNotEmpty(data),
+      }),
     );
   }
 
@@ -449,7 +491,10 @@ export class GrowthService {
     if (dto.interestId !== undefined) data.interestId = dto.interestId;
 
     return this.runUpdate(
-      this.prisma.inputItem.update({ where: { id, userId }, data: assertNotEmpty(data) }),
+      this.prisma.inputItem.update({
+        where: { id, userId },
+        data: assertNotEmpty(data),
+      }),
     );
   }
 
@@ -474,14 +519,14 @@ export class GrowthService {
     if (dto.sourceInputId !== undefined) data.sourceInputId = dto.sourceInputId;
 
     return this.runUpdate(
-      this.prisma.knowledge.update({ where: { id, userId }, data: assertNotEmpty(data) }),
+      this.prisma.knowledge.update({
+        where: { id, userId },
+        data: assertNotEmpty(data),
+      }),
     );
   }
 
-  private async updateSkill(
-    id: string,
-    dto: UpdateMapItemDto,
-  ): Promise<Skill> {
+  private async updateSkill(id: string, dto: UpdateMapItemDto): Promise<Skill> {
     const userId = await this.currentUser.ensureUserId();
     this.assertAllowedFields(MapKind.Skill, dto);
 
@@ -492,11 +537,17 @@ export class GrowthService {
     if (dto.xp !== undefined) data.xp = dto.xp;
     if (dto.evidence !== undefined) data.evidence = dto.evidence;
     if (dto.lastPracticedAt !== undefined) {
-      data.lastPracticedAt = parseDateOrNull(dto.lastPracticedAt, 'lastPracticedAt');
+      data.lastPracticedAt = parseDateOrNull(
+        dto.lastPracticedAt,
+        'lastPracticedAt',
+      );
     }
 
     return this.runUpdate(
-      this.prisma.skill.update({ where: { id, userId }, data: assertNotEmpty(data) }),
+      this.prisma.skill.update({
+        where: { id, userId },
+        data: assertNotEmpty(data),
+      }),
     );
   }
 
@@ -609,6 +660,21 @@ function truncate(value: string): string {
     : value;
 }
 
+/** 摘要里每类最多带几条，避免档案大了把提示词撑爆。 */
+function take<T>(items: T[]): T[] {
+  return items.slice(0, SUMMARY_ITEM_LIMIT);
+}
+
+/** `拉漏斗查询（Lv 2 · 3 个产出物）`——空的补充信息直接不显示。 */
+function withMeta(
+  label: string,
+  ...metas: Array<string | null | undefined>
+): string {
+  const extras = metas.filter((meta): meta is string => Boolean(meta));
+
+  return extras.length > 0 ? `${label}（${extras.join(' · ')}）` : label;
+}
+
 function parseDateOrNull(
   value: string | null | undefined,
   field: string,
@@ -651,7 +717,10 @@ function dedupeBy<T>(items: T[], keyOf: (item: T) => string): T[] {
 }
 
 /** 按名字在**同批次**已创建的条目里找 id，找不到就返回 null（不强求挂靠）。 */
-function lookupBy(map: Map<string, string>, name: string | null | undefined): string | null {
+function lookupBy(
+  map: Map<string, string>,
+  name: string | null | undefined,
+): string | null {
   return name ? (map.get(matchKey(name)) ?? null) : null;
 }
 

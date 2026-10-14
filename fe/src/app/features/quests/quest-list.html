@@ -1,0 +1,91 @@
+<section class="quest-page">
+  <header class="hero">
+    <p class="hero__eyebrow">M3 · 任务</p>
+    <h1 class="hero__title">今天做点什么？</h1>
+    <p class="hero__subtitle">
+      「今日」看的是今天到期的、手上正在做的，以及逾期还没完成的。
+      完成一个任务就把它推到「已完成」；打卡、XP 与连续天数在 M5 接上。
+    </p>
+  </header>
+
+  <div class="filters">
+    <mat-button-toggle-group
+      [value]="scope()"
+      aria-label="任务范围"
+      (change)="changeScope($event.value)"
+    >
+      <mat-button-toggle value="today">
+        <mat-icon fontSet="material-symbols-outlined">today</mat-icon>
+        今日
+      </mat-button-toggle>
+      <mat-button-toggle value="all">
+        <mat-icon fontSet="material-symbols-outlined">inbox</mat-icon>
+        全部
+      </mat-button-toggle>
+    </mat-button-toggle-group>
+
+    <mat-button-toggle-group
+      class="filters__status"
+      [value]="filter()"
+      aria-label="状态筛选"
+      (change)="changeFilter($event.value)"
+    >
+      <mat-button-toggle value="all">全部</mat-button-toggle>
+      @for (status of statuses; track status) {
+        <mat-button-toggle [value]="status">{{ statusLabels[status] }}</mat-button-toggle>
+      }
+    </mat-button-toggle-group>
+
+    <button matButton type="button" [disabled]="loading()" (click)="refresh()">
+      <mat-icon fontSet="material-symbols-outlined">refresh</mat-icon>
+      刷新
+    </button>
+  </div>
+
+  <mat-card appearance="outlined" class="panel">
+    <mat-card-header>
+      <mat-card-title>{{ scope() === 'today' ? '今日任务' : '全部任务' }}</mat-card-title>
+      <mat-card-subtitle>
+        共 {{ total() }} 个任务 · 本页已完成 {{ doneCount() }} 个
+      </mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      @if (error(); as message) {
+        <p class="notice notice--error">
+          <mat-icon fontSet="material-symbols-outlined">error</mat-icon>
+          <span>{{ message }}</span>
+        </p>
+      }
+
+      @if (loading()) {
+        <p class="notice notice--muted">
+          <mat-progress-spinner mode="indeterminate" [diameter]="18" />
+          正在加载…
+        </p>
+      } @else if (records().length === 0) {
+        <p class="notice notice--muted">
+          <mat-icon fontSet="material-symbols-outlined">task_alt</mat-icon>
+          <span>
+            @if (scope() === 'today') {
+              今天没有安排任务。去「目标」里挑一条任务线，给它加个带截止时间的任务。
+            } @else {
+              还没有任务。先在「目标」里建一条任务线，再往里面加任务。
+            }
+          </span>
+        </p>
+      } @else {
+        <ul class="quests">
+          @for (quest of records(); track quest.id) {
+            <app-quest-card
+              [quest]="quest"
+              [goalTitle]="goalTitles()[quest.goalId] ?? '未命名目标'"
+              (changed)="saveQuest(quest.id, $event)"
+              (removed)="removeQuest(quest)"
+            />
+          }
+        </ul>
+      }
+    </mat-card-content>
+  </mat-card>
+</section>

@@ -39,7 +39,13 @@
         ></textarea>
       </mat-form-field>
 
-      <div class="pdf-row">
+      <div
+        class="pdf-row"
+        [class.pdf-row--over]="pdfDragging()"
+        (dragover)="onPdfDragOver($event)"
+        (dragleave)="onPdfDragLeave()"
+        (drop)="onPdfDrop($event)"
+      >
         <input
           #pdfInput
           id="map-pdf-input"
@@ -55,7 +61,7 @@
           (click)="pdfInput.click()"
         >
           <mat-icon fontSet="material-symbols-outlined">upload_file</mat-icon>
-          选择 PDF（≤10MB）
+          选择 PDF（≤10MB，也可以直接拖进来）
         </button>
 
         @if (pdfName(); as name) {
@@ -222,6 +228,13 @@
       </mat-card-content>
 
       <mat-card-actions class="candidate-actions">
+        <button mat-button type="button" (click)="toggleAllRows()">
+          <mat-icon fontSet="material-symbols-outlined">
+            {{ allSelected() ? 'deselect' : 'select_all' }}
+          </mat-icon>
+          {{ allSelected() ? '全不选' : '全选' }}
+        </button>
+
         <button
           mat-flat-button
           type="button"
@@ -268,6 +281,41 @@
           </p>
         }
 
+        @if (outletNotice(); as notice) {
+          <div class="notice notice--warn outlet">
+            <mat-icon fontSet="material-symbols-outlined">inventory_2</mat-icon>
+            <span>
+              「{{ notice.label }}」标成读完了，但还没留下任何东西：
+              补一句「一句话收获」，或让它产出一条知识条目。
+            </span>
+            <input
+              class="outlet__input"
+              [value]="outletDraft()"
+              placeholder="一句话收获，例如：留存率要按同期群拆开看"
+              aria-label="一句话收获"
+              (input)="outletDraft.set(outletInput.value)"
+              (keydown.enter)="saveOutlet()"
+              #outletInput
+            />
+            <button
+              mat-flat-button
+              type="button"
+              [disabled]="outletSaving()"
+              (click)="saveOutlet()"
+            >
+              @if (outletSaving()) {
+                <mat-progress-spinner mode="indeterminate" [diameter]="16" />
+              } @else {
+                <ng-container>
+                  <mat-icon fontSet="material-symbols-outlined">check</mat-icon>
+                  补上
+                </ng-container>
+              }
+            </button>
+            <button mat-button type="button" (click)="dismissOutlet()">稍后</button>
+          </div>
+        }
+
         <div class="kinds">
           @for (kind of allKinds; track kind) {
             <div class="kind">
@@ -275,7 +323,50 @@
                 <mat-icon fontSet="material-symbols-outlined">{{ kindIcons[kind] }}</mat-icon>
                 {{ kindLabels[kind] }}
                 <span class="kind__count">{{ countOf(kind) }}</span>
+
+                @if (manualKind() !== kind) {
+                  <button
+                    mat-button
+                    type="button"
+                    class="kind__add"
+                    (click)="startManualAdd(kind)"
+                  >
+                    <mat-icon fontSet="material-symbols-outlined">add</mat-icon>
+                    手动新增
+                  </button>
+                }
               </h3>
+
+              @if (manualKind() === kind) {
+                <div class="manual">
+                  <input
+                    class="manual__input"
+                    [value]="manualLabel()"
+                    [placeholder]="manualPlaceholders[kind]"
+                    [attr.aria-label]="'手动新增' + kindLabels[kind]"
+                    (input)="manualLabel.set(manualInput.value)"
+                    (keydown.enter)="submitManualAdd()"
+                    (keydown.escape)="cancelManualAdd()"
+                    #manualInput
+                  />
+                  <button
+                    mat-flat-button
+                    type="button"
+                    [disabled]="manualSaving()"
+                    (click)="submitManualAdd()"
+                  >
+                    @if (manualSaving()) {
+                      <mat-progress-spinner mode="indeterminate" [diameter]="16" />
+                    } @else {
+                      <ng-container>
+                        <mat-icon fontSet="material-symbols-outlined">check</mat-icon>
+                        添加
+                      </ng-container>
+                    }
+                  </button>
+                  <button mat-button type="button" (click)="cancelManualAdd()">取消</button>
+                </div>
+              }
 
               @if (itemsOf(kind).length === 0) {
                 <p class="kind__empty">还没有条目</p>

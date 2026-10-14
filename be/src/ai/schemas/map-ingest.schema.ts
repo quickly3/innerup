@@ -1,5 +1,12 @@
 import { z } from 'zod';
 
+import {
+  looseEnum,
+  looseInt,
+  optionalText,
+  requiredText,
+} from './schema-helpers.js';
+
 /**
  * 「档案归类」的结构化输出契约（《项目规划》第 8.1 / 13.9 节）。
  *
@@ -8,28 +15,7 @@ import { z } from 'zod';
  * 真正的结构校验由「用户确认后落库」时的 class-validator DTO 负责。
  */
 
-const confidence = z.coerce.number().int().min(1).max(5).catch(3);
-
-const requiredText = (max: number) => z.string().trim().min(1).max(max);
-const optionalText = (max: number) =>
-  z
-    .string()
-    .trim()
-    .max(max)
-    .nullish()
-    .transform((value) => (value && value.length > 0 ? value : null))
-    .catch(null);
-
-/** 模型常把枚举写成大写或带空格；归一化后仍不认识就退回默认值。 */
-function looseEnum<const T extends readonly [string, ...string[]]>(
-  values: T,
-  fallback: T[number],
-) {
-  return z.preprocess(
-    (value) => (typeof value === 'string' ? value.trim().toLowerCase() : value),
-    z.enum(values).catch(fallback),
-  );
-}
+const confidence = looseInt(1, 5, 3);
 
 const INTEREST_STATUSES = [
   'curious',
@@ -38,19 +24,13 @@ const INTEREST_STATUSES = [
   'cool',
   'dropped',
 ] as const;
-const INPUT_KINDS = [
-  'book',
-  'course',
-  'article',
-  'podcast',
-  'video',
-] as const;
+const INPUT_KINDS = ['book', 'course', 'article', 'podcast', 'video'] as const;
 const INPUT_STATUSES = ['queued', 'consuming', 'finished', 'dropped'] as const;
 
 export const focusCandidateSchema = z.object({
   title: requiredText(120),
   why: optionalText(300),
-  intensity: z.coerce.number().int().min(1).max(5).catch(3),
+  intensity: looseInt(1, 5, 3),
   confidence,
   reason: optionalText(200),
 });

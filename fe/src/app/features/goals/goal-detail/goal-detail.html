@@ -1,0 +1,284 @@
+<section class="detail-page">
+  <a class="back" routerLink="/goals">
+    <mat-icon fontSet="material-symbols-outlined">arrow_back</mat-icon>
+    全部目标
+  </a>
+
+  @if (loading() && !goal()) {
+    <p class="notice notice--muted">
+      <mat-progress-spinner mode="indeterminate" [diameter]="18" />
+      正在加载…
+    </p>
+  } @else if (error(); as message) {
+    <p class="notice notice--error">
+      <mat-icon fontSet="material-symbols-outlined">error</mat-icon>
+      <span>{{ message }}</span>
+    </p>
+  }
+
+  @if (goal(); as detail) {
+    <header class="hero">
+      <h1 class="hero__title">{{ detail.title }}</h1>
+      @if (detail.description) {
+        <p class="hero__subtitle">{{ detail.description }}</p>
+      }
+
+      <div class="hero__row">
+        <mat-form-field appearance="outline" class="hero__status" subscriptSizing="dynamic">
+          <mat-select
+            [value]="detail.status"
+            aria-label="目标状态"
+            (selectionChange)="changeStatus($event.value)"
+          >
+            @for (status of statuses; track status) {
+              <mat-option [value]="status">{{ statusLabels[status] }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+
+        <mat-progress-bar
+          mode="determinate"
+          class="hero__bar"
+          [value]="progress()"
+          aria-label="任务完成进度"
+        />
+
+        <span class="hero__counts">{{ doneCount() }} / {{ questCount() }} 个任务</span>
+      </div>
+    </header>
+
+    <mat-card appearance="outlined" class="panel">
+      <mat-card-header>
+        <mat-card-title>任务清单</mat-card-title>
+        <mat-card-subtitle>按顺序执行；改状态 / 类型 / 难度 / XP 会立即保存</mat-card-subtitle>
+      </mat-card-header>
+
+      <mat-card-content>
+        @if (balance().length > 0 && questCount() > 0) {
+          <p class="notice notice--warn">
+            <mat-icon fontSet="material-symbols-outlined">balance</mat-icon>
+            <span>
+              {{ kindBalanceHint }}
+              这条任务线还缺：
+              @for (kind of balance(); track kind) {
+                <strong>{{ kindLabels[kind] }}</strong>
+              }
+            </span>
+          </p>
+        }
+
+        @if (questCount() === 0) {
+          <p class="notice notice--muted">
+            <mat-icon fontSet="material-symbols-outlined">checklist</mat-icon>
+            <span>
+              还没有任务。让 AI 依据你的目标与档案生成一条任务线，或手动加几条把「输入 →
+              练习 → 产出」串起来。
+            </span>
+          </p>
+        } @else {
+          <ul class="quests">
+            @for (quest of detail.quests; track quest.id; let i = $index) {
+              <app-quest-card
+                [quest]="quest"
+                [sortable]="true"
+                [canMoveUp]="i > 0"
+                [canMoveDown]="i < detail.quests.length - 1"
+                (changed)="saveQuest(quest.id, $event)"
+                (removed)="removeQuest(quest)"
+                (moved)="move($event, i)"
+              />
+            }
+          </ul>
+        }
+      </mat-card-content>
+
+      <mat-card-actions>
+        <button
+          mat-flat-button
+          type="button"
+          [disabled]="planning()"
+          (click)="generateQuests()"
+        >
+          @if (planning()) {
+            <mat-progress-spinner mode="indeterminate" [diameter]="16" />
+            生成中…
+          } @else {
+            <ng-container>
+              <mat-icon fontSet="material-symbols-outlined">auto_awesome</mat-icon>
+              AI 生成任务线
+            </ng-container>
+          }
+        </button>
+
+        <button mat-button type="button" [disabled]="planning()" (click)="togglePlanning()">
+          <mat-icon fontSet="material-symbols-outlined">
+            {{ planOpen() ? 'expand_less' : 'tune' }}
+          </mat-icon>
+          {{ planOpen() ? '收起设置' : '生成设置' }}
+        </button>
+
+        <button mat-button type="button" [disabled]="planning()" (click)="toggleAdding()">
+          <mat-icon fontSet="material-symbols-outlined">
+            {{ adding() ? 'close' : 'add' }}
+          </mat-icon>
+          {{ adding() ? '取消' : '添加任务' }}
+        </button>
+      </mat-card-actions>
+
+      @if (planResult(); as plan) {
+        <mat-card-content class="plan-result">
+          @if (plan.source === 'template') {
+            <p class="notice notice--warn">
+              <mat-icon fontSet="material-symbols-outlined">build</mat-icon>
+              <span>
+                AI 暂时不可用（未配置 Key 或上游异常），已按<strong>通用模板</strong>生成
+                {{ plan.created.length }} 条任务兜底：可以直接改，也可以稍后点「AI 生成任务线」重新生成。
+              </span>
+            </p>
+          } @else {
+            <p class="notice notice--ok">
+              <mat-icon fontSet="material-symbols-outlined">auto_awesome</mat-icon>
+              <span>
+                已生成并落库 <strong>{{ plan.created.length }}</strong> 条任务
+                @if (plan.replaced > 0) {
+                  ，清掉 {{ plan.replaced }} 条还没开始的任务
+                }
+                @if (plan.meta.mapItems > 0) {
+                  ；这次参考了 {{ plan.meta.mapItems }} 条档案
+                } @else {
+                  ；你的档案还是空的，去
+                  <a routerLink="/map">档案</a>
+                  补几条，生成的任务会更贴合你
+                }
+              </span>
+            </p>
+          }
+
+          @if (plan.suggestedTitle; as title) {
+            <p class="notice notice--muted">
+              <mat-icon fontSet="material-symbols-outlined">lightbulb</mat-icon>
+              <span>
+                AI 建议把目标标题改成「{{ title }}」
+                <button mat-button type="button" (click)="adoptSuggestedTitle(title)">
+                  采纳
+                </button>
+              </span>
+            </p>
+          }
+        </mat-card-content>
+      }
+
+      @if (planError(); as message) {
+        <mat-card-content class="plan-result">
+          <p class="notice notice--error">
+            <mat-icon fontSet="material-symbols-outlined">error</mat-icon>
+            <span>{{ message }}</span>
+          </p>
+        </mat-card-content>
+      }
+
+      @if (planOpen()) {
+        <mat-card-content class="add">
+          <p class="notice notice--muted plan-hint">
+            <mat-icon fontSet="material-symbols-outlined">psychology</mat-icon>
+            <span>
+              AI 会按「目标 + 下方信息 + 你的
+              <a routerLink="/map">档案</a>
+              」生成 3~7 条任务，并要求输入与产出交替。目标说明写具体一点，生成结果更贴合。
+            </span>
+          </p>
+
+          <mat-form-field appearance="outline" class="add__desc">
+            <mat-label>当前水平（可选）</mat-label>
+            <input
+              matInput
+              maxlength="500"
+              [value]="planLevel()"
+              (input)="planLevel.set(levelInput.value)"
+              placeholder="例如：零基础，没碰过吉他，每天最多练 30 分钟"
+              #levelInput
+            />
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="add__hours">
+            <mat-label>每周可投入（小时）</mat-label>
+            <input
+              matInput
+              type="number"
+              [min]="minWeeklyHours"
+              [max]="maxWeeklyHours"
+              [value]="planHours() ?? ''"
+              (input)="planHours.set(hoursInput.value === '' ? null : +hoursInput.value)"
+              #hoursInput
+            />
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="add__mode">
+            <mat-label>落库方式</mat-label>
+            <mat-select [value]="planMode()" (selectionChange)="planMode.set($event.value)">
+              @for (mode of planModes; track mode) {
+                <mat-option [value]="mode" [matTooltip]="planModeHints[mode]">
+                  {{ planModeLabels[mode] }}
+                </mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+        </mat-card-content>
+      }
+
+      @if (adding()) {
+        <mat-card-content class="add">
+          <mat-form-field appearance="outline" class="add__title">
+            <mat-label>任务内容</mat-label>
+            <input
+              matInput
+              maxlength="200"
+              [value]="newTitle()"
+              (input)="newTitle.set(titleInput.value)"
+              placeholder="例如：认识持琴姿势与和弦图"
+              #titleInput
+              (keydown.enter)="addQuest()"
+            />
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="add__kind">
+            <mat-label>类型</mat-label>
+            <mat-select [value]="newKind()" (selectionChange)="newKind.set($event.value)">
+              @for (kind of kinds; track kind) {
+                <mat-option [value]="kind" [matTooltip]="kindHints[kind]">
+                  {{ kindLabels[kind] }}
+                </mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="add__desc">
+            <mat-label>怎么做 / 验收标准（可选）</mat-label>
+            <input
+              matInput
+              maxlength="1000"
+              [value]="newDescription()"
+              (input)="newDescription.set(descInput.value)"
+              #descInput
+              (keydown.enter)="addQuest()"
+            />
+          </mat-form-field>
+
+          <button mat-flat-button type="button" [disabled]="saving()" (click)="addQuest()">
+            @if (saving()) {
+              <mat-progress-spinner mode="indeterminate" [diameter]="16" />
+              添加中…
+            } @else {
+              <ng-container>
+                <mat-icon fontSet="material-symbols-outlined">check</mat-icon>
+                添加
+              </ng-container>
+            }
+          </button>
+        </mat-card-content>
+      }
+    </mat-card>
+
+    <p class="hint">M5 起：完成任务后打卡，记录投入时长与总结，拿到 XP 与连续天数。</p>
+  }
+</section>

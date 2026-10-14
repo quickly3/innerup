@@ -89,15 +89,17 @@ fe/
       ├─ app.ts / .html / .scss # 应用外壳（工具栏导航 + router-outlet）
       ├─ app.routes.spec.ts     # 路由骨架测试（路径、懒加载、页面标题）
       ├─ core/
-      │  ├─ api/                # 各资源 HTTP 服务（health.service.ts ...）
+      │  ├─ api/                # 各资源 HTTP 服务（health.service.ts / map.service.ts / goal.service.ts）
       │  ├─ interceptors/       # api.interceptor.ts：baseURL + 响应解包
       │  └─ state/              # Signals 状态服务（后续）
       ├─ shared/
-      │  └─ page-placeholder/   # 未实现页面的统一占位卡片
+      │  ├─ page-placeholder/   # 未实现页面的统一占位卡片
+      │  └─ quest-card/         # 任务卡片（M3）：目标详情与任务页共用
       ├─ features/
       │  ├─ dashboard/          # 面板（M1 环境自检；M5 换成等级 / XP / 今日任务）
-      │  ├─ goals/              # 目标列表 / 详情（M3 实现）
-      │  ├─ quests/             # 任务列表 + 打卡（M3 / M5 实现）
+      │  ├─ goals/              # 目标列表（M3）+ goal-detail/ 目标详情（M3）
+      │  ├─ quests/             # 任务列表（M3）+ 打卡（M5）
+      │  ├─ map/                # 个人档案录入与管理（M2.5）
       │  ├─ profile/            # 角色卡 / 技能雷达（M5 实现）
       │  └─ insights/           # 复盘（MVP 之后）
       └─ ui/                    # 经验条、雷达图、热力图等展示组件（后续）
@@ -110,14 +112,32 @@ M2 已把一级路由与页面骨架搭好，全部懒加载：
 | 路径 | 页面 | 状态 |
 | --- | --- | --- |
 | `/dashboard` | 面板 | ✅ 已有环境自检；M5 换成等级 / XP / 今日任务 |
-| `/goals` | 目标（任务线） | ⏳ 占位 → M3 实现 CRUD 与列表 |
-| `/quests` | 任务 | ⏳ 占位 → M3 列表、M5 打卡 |
+| `/goals` | 目标（任务线） | ✅ M3：列表 + 新建 + 改状态 + 删除 |
+| `/goals/:id` | 目标详情 | ✅ M3：任务清单（增 / 改 / 排序 / 删）+ 输入产出交替提示；M4：**AI 生成任务线**（生成设置 + 结果提示 + 采纳建议标题） |
+| `/quests` | 任务 | ✅ M3：今日 / 全部 + 状态筛选（任务卡片可设截止时间，设了才会进「今日任务」）；M5 加打卡与 XP |
+| `/map` | 个人档案 | ✅ M2.5：录入（文本 / PDF 拖拽 / GitHub）+ 管理（五类手动新增 / 改名 / 改状态 / 删除）；M8 加看板 |
 | `/profile` | 角色卡 | ⏳ 占位 → M5 实现 |
 | `/insights` | 复盘 | ⏳ 占位（不在 MVP 范围） |
 | `''`、`**` | — | 重定向到 `/dashboard` |
 
 未实现的页面统一复用 `shared/page-placeholder/page-placeholder.ts`（说明「计划在哪个里程碑做什么」）。
 实现某个页面时，把 `app.routes.ts` 里对应的 `loadComponent` 指向真实组件即可，导航与标题无需改动。
+
+### M3 的两个坑（照着做就行）
+
+- **路由参数用 `ngOnInit` 取，不要在构造函数里用**：`GoalDetailPage` 用 `input.required<string>()` 接
+  `:id`，而路由输入是在**构造完成后**才写入的，构造函数里读会直接抛 `NG0950`。
+- **任务卡片是共享组件**：`shared/quest-card/` 由目标详情与任务页共用，它**只渲染并发事件**
+  （`changed` / `removed` / `moved`），接口请求由页面负责，页面收到事件后调接口再重新拉取。
+  跨页的 HTTP 错误提示统一用 `core/api/http-error.ts` 的 `describeHttpError()`。
+
+### M4 的 AI 生成（同步请求，别把它做成流式）
+
+- `GoalService.generateQuests()` 打的是**普通 POST**，AI 可能要十几秒：生成期间用 `planning` 信号
+  禁用按钮并显示「生成中…」，返回后 `refresh()` 重新拉目标详情即可。
+- **生成即落库**，所以前端不维护「待确认候选」状态；`mode=replace` 会在提交前 `confirm()`，
+  避免用户没意识到「还没开始的任务会被清掉」。
+- AI 不可用时后端用**通用模板**兜底并回传 `source: 'template'`，页面用醒目提示说明「非 AI 生成」；真正的失败（入参非法 / 目标不存在）只写 `planError`，**不清空页面**。
 
 ## 开发约定
 
@@ -131,6 +151,7 @@ M2 已把一级路由与页面骨架搭好，全部懒加载：
 - 路由按 `features/` **懒加载**：`loadComponent: () => import('./features/x/x').then(m => m.X)`。
 - **新页面先接骨架**：占位页复用 `shared/page-placeholder`，真实实现时只改 `app.routes.ts` 一行。
 - 提交前跑 `npm run build` 与 `npm test`。
+- **HTTP 错误提示统一用 `core/api/http-error.ts` 的 `describeHttpError()`**，不要各写一份。
 
 ### 一个最小示例
 
