@@ -21,7 +21,11 @@ import {
   MAX_INGEST_CHARS,
   MIN_INGEST_CHARS,
 } from './growth.constants.js';
-import { cleanReadme, composeGithubText } from './github-readme.text.js';
+import {
+  cleanReadme,
+  composeGithubText,
+  extractBadges,
+} from './github-readme.text.js';
 import { parseGithubTarget } from './github-url.js';
 import type {
   GithubReadmeBundle,
@@ -65,7 +69,9 @@ export class GithubReadmeService implements OnModuleInit {
 
   async fetchReadmes(rawInput: string): Promise<GithubReadmeBundle> {
     const target = parseGithubTarget(rawInput);
-    const maxRepos = this.hasToken() ? GITHUB_MAX_REPOS : GITHUB_MAX_REPOS_NO_TOKEN;
+    const maxRepos = this.hasToken()
+      ? GITHUB_MAX_REPOS
+      : GITHUB_MAX_REPOS_NO_TOKEN;
 
     const [profile, repos] = await Promise.all([
       this.fetchProfile(target.owner),
@@ -88,12 +94,18 @@ export class GithubReadmeService implements OnModuleInit {
       async (repo) => {
         try {
           const raw = await this.fetchReadme(target.owner, repo.name);
-          return raw === null
-            ? null
-            : {
-                ...repo,
-                readme: cleanReadme(raw).slice(0, GITHUB_MAX_README_CHARS),
-              };
+
+          if (raw === null) {
+            return null;
+          }
+
+          const badges = extractBadges(raw);
+
+          return {
+            ...repo,
+            badges,
+            readme: cleanReadme(raw, badges).slice(0, GITHUB_MAX_README_CHARS),
+          };
         } catch (error) {
           // 单个仓库读失败（限流 / 抖动）不该废掉整次录入，先记下来继续做别的
           firstError ??= error;
@@ -102,7 +114,9 @@ export class GithubReadmeService implements OnModuleInit {
       },
     );
 
-    const docs = fetched.filter((doc): doc is GithubRepoDoc => doc !== null);
+    const docs = dropDuplicateProfiles(fetched.filter(isRepoDoc));
+
+    // console.log(docs);
 
     // 有资料卡时就算一个仓库 README 都没有，也还有得归类，所以门槛放到后面统一判断
     if (docs.length === 0 && !profile) {
@@ -147,7 +161,9 @@ export class GithubReadmeService implements OnModuleInit {
    */
   private async fetchProfile(owner: string): Promise<GithubUserProfile | null> {
     try {
-      const response = await this.request(`/users/${encodeURIComponent(owner)}`);
+      const response = await this.request(
+        `/users/${encodeURIComponent(owner)}`,
+      );
 
       return response.status === 404
         ? null
@@ -175,7 +191,9 @@ export class GithubReadmeService implements OnModuleInit {
     );
 
     if (response.status === 404) {
-      throw new NotFoundException(`找不到 GitHub 用户 ${owner}，检查一下地址拼写`);
+      throw new NotFoundException(
+        `找不到 GitHub 用户 ${owner}，检查一下地址拼写`,
+      );
     }
 
     const payload = (await response.json()) as unknown;
@@ -213,7 +231,10 @@ export class GithubReadmeService implements OnModuleInit {
   }
 
   /** 返回 `null` 表示这个仓库没有 README（404），不算错误。 */
-  private async fetchReadme(owner: string, repo: string): Promise<string | null> {
+  private async fetchReadme(
+    owner: string,
+    repo: string,
+  ): Promise<string | null> {
     const response = await this.request(
       `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/readme`,
       'application/vnd.github.raw',
@@ -230,7 +251,10 @@ export class GithubReadmeService implements OnModuleInit {
    * - **401 会自动降级**：token 过期 / 复制不全时不再死给用户看，改走未认证
    *   （额度 60 次/小时）并留一条 warn，进程内只降级一次，不会每个请求都白试一遍。
    */
-  private async request(path: string, accept = 'application/vnd.github+json'): Promise<Response> {
+  private async request(
+    path: string,
+    accept = 'application/vnd.github+json',
+  ): Promise<Response> {
     const headers: Record<string, string> = {
       accept,
       'user-agent': 'InnerUp',
@@ -289,7 +313,9 @@ export class GithubReadmeService implements OnModuleInit {
       );
     }
 
-    throw new ServiceUnavailableException(`GitHub 返回 ${response.status}${detail}`);
+    throw new ServiceUnavailableException(
+      `GitHub 返回 ${response.status}${detail}`,
+    );
   }
 
   private hasToken(): boolean {
@@ -321,20 +347,26 @@ async function mapWithConcurrency<T, R>(
   const results = Array.from<R>({ length: items.length });
   let cursor = 0;
 
-  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (cursor < items.length) {
-      const index = cursor;
-      cursor += 1;
-      results[index] = await worker(items[index]);
-    }
-  });
+  const runners = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      while (cursor < items.length) {
+        const index = cursor;
+        cursor += 1;
+        results[index] = await worker(items[index]);
+      }
+    },
+  );
 
   await Promise.all(runners);
 
   return results;
 }
 
-function toRepoDoc(payload: GithubRepoPayload, fallbackFullName: string): GithubRepoDoc {
+function toRepoDoc(
+  payload: GithubRepoPayload,
+  fallbackFullName: string,
+): GithubRepoDoc {
   const fullName = readText(payload.full_name) ?? fallbackFullName;
 
   return {
@@ -345,13 +377,51 @@ function toRepoDoc(payload: GithubRepoPayload, fallbackFullName: string): Github
     topics: Array.isArray(payload.topics)
       ? payload.topics.filter((topic) => typeof topic === 'string').slice(0, 6)
       : [],
-    stars: typeof payload.stargazers_count === 'number' ? payload.stargazers_count : 0,
+    stars:
+      typeof payload.stargazers_count === 'number'
+        ? payload.stargazers_count
+        : 0,
+    badges: { names: [], pairs: [] },
     readme: '',
   };
 }
 
 function readText(value: unknown): string | null {
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+  return typeof value === 'string' && value.trim().length > 0
+    ? value.trim()
+    : null;
+}
+
+function isRepoDoc(doc: GithubRepoDoc | null): doc is GithubRepoDoc {
+  return doc !== null;
+}
+
+/**
+ * 同一个 README 既可能是 ID 版（个人档案）又可能是 `owner/owner` 版（账号主页），
+ * 两行一模一样时只留前者。不这么办的话，徽章墙在正文里出现两遍，
+ * 预算会平白少掉一大块，AI 也更容易把同一条技能拆成两条。
+ */
+function dropDuplicateProfiles(
+  docs: readonly GithubRepoDoc[],
+): GithubRepoDoc[] {
+  const seen = new Set<string>();
+  const kept: GithubRepoDoc[] = [];
+
+  for (const doc of docs) {
+    const key = doc.readme.slice(0, 200).replace(/\s+/g, ' ').trim();
+
+    if (key.length > 0) {
+      if (seen.has(key)) {
+        continue;
+      }
+
+      seen.add(key);
+    }
+
+    kept.push(doc);
+  }
+
+  return kept;
 }
 
 /** 资料卡字段经常带换行 / 多个空格，压成一行才好塞进提示词。 */
@@ -365,7 +435,10 @@ function readInlineText(value: unknown, max: number): string | null {
   return text.replace(/\s+/g, ' ').slice(0, max);
 }
 
-function toUserProfile(payload: GithubUserPayload, fallbackLogin: string): GithubUserProfile {
+function toUserProfile(
+  payload: GithubUserPayload,
+  fallbackLogin: string,
+): GithubUserProfile {
   return {
     login: readText(payload.login) ?? fallbackLogin,
     name: readInlineText(payload.name, 80),

@@ -7,7 +7,11 @@ import { ConfigService } from '@nestjs/config';
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { GITHUB_MAX_REPOS_NO_TOKEN } from './growth.constants.js';
-import { cleanReadme, composeGithubText } from './github-readme.text.js';
+import {
+  cleanReadme,
+  composeGithubText,
+  extractBadges,
+} from './github-readme.text.js';
 import { GithubReadmeService } from './github-readme.service.js';
 import type {
   GithubRepoDoc,
@@ -53,7 +57,7 @@ function userPayload(extra: Record<string, unknown> = {}) {
 function doc(
   fullName: string,
   readme: string,
-  extra: Partial<GithubRepoDoc> = {},
+  extra: Partial<Omit<GithubRepoDoc, 'readme'>> = {},
 ): GithubRepoDoc {
   return {
     fullName,
@@ -62,16 +66,23 @@ function doc(
     language: null,
     topics: [],
     stars: 0,
+    badges: { names: [], pairs: [] },
     readme,
     ...extra,
   };
 }
 
 function createService(env: Record<string, string> = {}): GithubReadmeService {
-  return new GithubReadmeService(new ConfigService({ GITHUB_TOKEN: '', ...env }));
+  return new GithubReadmeService(
+    new ConfigService({ GITHUB_TOKEN: '', ...env }),
+  );
 }
 
-function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
+function json(
+  body: unknown,
+  status = 200,
+  headers: Record<string, string> = {},
+): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { 'content-type': 'application/json', ...headers },
@@ -98,9 +109,11 @@ afterEach(() => {
 });
 
 describe('cleanReadme', () => {
-  it('洗掉徽章、HTML 注释与链接地址，保留正文', () => {
+  it('洗掉徽章图片、HTML 注释与链接地址，保留正文', () => {
     const raw = [
-      '[![Build](https://img.shields.io/badge.svg)](https://github.com/actions)',
+      '[![Build](https://img.shields.io/badge/build-passing-green)](https://github.com/actions)',
+      '[![Node](https://img.shields.io/badge/Node.js-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org)',
+      '[![Angular](https://img.shields.io/badge/Angular-DD0031?logo=angular&logoColor=white)](https://angular.dev)',
       '<!-- 这是注释 -->',
       '',
       '# 项目',
@@ -119,12 +132,63 @@ describe('cleanReadme', () => {
     expect(cleaned).toContain('看在线文档开始。');
     expect(cleaned).not.toContain('\n\n\n');
   });
+
+  it('从徽章墙里提取技能名，并把原来的空标题一起删掉', () => {
+    const raw = [
+      '#### 🌱 Main Lan',
+      '',
+      '![HTML5](https://img.shields.io/badge/-HTML5-E34F26?style=flat-square&logo=html5&logoColor=white)',
+      '![CSS3](https://img.shields.io/badge/CSS3-1572B6?style=flat-square&logo=css3&logoColor=white)',
+      '![Node](https://img.shields.io/badge/Node.js-339933?style=flat-square&logo=nodedotjs&logoColor=white)',
+      '![Ant Design](https://img.shields.io/badge/Ant%20Design-0170FE?style=flat-square&logo=antdesign&logoColor=white)',
+      '![scikit-learn](https://img.shields.io/badge/scikit--learn-F7931E?style=flat-square&logo=scikitlearn&logoColor=white)',
+      '![License](https://img.shields.io/badge/license-MIT-green)',
+      '',
+      '#### 🌱 正经内容',
+      '',
+      '这个是正文。',
+    ].join('\n');
+
+    const cleaned = cleanReadme(raw);
+
+    expect(cleaned).toContain(
+      '技术徽章：HTML5、CSS3、Node.js、Ant Design、scikit-learn',
+    );
+    expect(cleaned).toContain('其它徽章：license: MIT');
+    // 徽章墙那一段的标题底下已经没东西了，连标题一起删
+    expect(cleaned).not.toContain('Main Lan');
+    expect(cleaned).toContain('#### 🌱 正经内容');
+    expect(cleaned).not.toContain('shields.io');
+    expect(cleaned).not.toContain('![');
+  });
+});
+
+describe('extractBadges', () => {
+  it('只认 shields 静态徽章，按 shields 的规则还原名字', () => {
+    const raw = [
+      '![Angular](https://img.shields.io/badge/Angular-DD0031?logo=angular)',
+      '![Dupe](https://img.shields.io/badge/Angular-DD0031?logo=angular)',
+      '![KeyValue](https://img.shields.io/badge/Node-v1.0-blue)',
+      '![Pure](https://img.shields.io/badge/Rust)',
+      '![Version](https://img.shields.io/badge/1.0.0-blue)',
+      '![Dynamic](https://img.shields.io/github/stars/me/repo)',
+      '![Custom](https://img.shields.io/endpoint?url=https://x)',
+    ].join('\n');
+
+    expect(extractBadges(raw)).toEqual({
+      names: ['Angular', 'Rust'],
+      pairs: ['Node: v1.0'],
+    });
+  });
 });
 
 describe('composeGithubText', () => {
   it('带资料卡与仓库元信息，且总长不超过预算', () => {
     const docs = [
-      doc('me/alpha', '正文'.repeat(40), { description: '示例项目', stars: 12 }),
+      doc('me/alpha', '正文'.repeat(40), {
+        description: '示例项目',
+        stars: 12,
+      }),
       doc('me/beta', 'bbb', { stars: 300 }),
     ];
 
@@ -138,19 +202,42 @@ describe('composeGithubText', () => {
     expect(composed.text).toContain('加入于 2015-03');
     expect(composed.text).toContain('状态：正在找工作');
     // 代表作按 Star 排：beta 应该排在 alpha 前面
-    expect(composed.text).toContain('代表作（按 Star）：me/beta（★300）、me/alpha（★12）');
+    expect(composed.text).toContain(
+      '代表作（按 Star）：me/beta（★300）、me/alpha（★12）',
+    );
     expect(composed.text).toContain('### 仓库：me/alpha');
     expect(composed.text).toContain('简介：示例项目');
-    expect(composed.repos.map((repo) => repo.fullName)).toEqual(['me/alpha', 'me/beta']);
+    expect(composed.repos.map((repo) => repo.fullName)).toEqual([
+      'me/alpha',
+      'me/beta',
+    ]);
     expect(composed.truncated).toBe(false);
   });
 
   it('资料卡读不到时照样能拼出文本', () => {
-    const composed = composeGithubText(TARGET, null, [doc('me/alpha', '正文')], 10_000);
+    const composed = composeGithubText(
+      TARGET,
+      null,
+      [doc('me/alpha', '正文')],
+      10_000,
+    );
 
     expect(composed.text).toContain('## GitHub：me');
     expect(composed.text).not.toContain('### 资料卡');
     expect(composed.text).toContain('### 仓库：me/alpha');
+  });
+
+  it('仓库块带上从徽章墙抽出的技术名', () => {
+    const badges = { names: ['Angular', 'CSS3'], pairs: ['license: MIT'] };
+    const composed = composeGithubText(
+      TARGET,
+      null,
+      [doc('me/alpha', '正文', { badges })],
+      10_000,
+    );
+
+    expect(composed.text).toContain('技术徽章：Angular、CSS3');
+    expect(composed.text).toContain('其它徽章：license: MIT');
   });
 
   it('资料卡里的换行被压平，避免撑坏提示词结构', () => {
@@ -183,16 +270,18 @@ describe('GithubReadmeService', () => {
   it('解析不出地址时直接 400，不发任何请求', async () => {
     const fetchMock = stubFetch(async () => json({}));
 
-    await expect(createService().fetchReadmes('https://gitlab.com/me')).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+    await expect(
+      createService().fetchReadmes('https://gitlab.com/me'),
+    ).rejects.toBeInstanceOf(BadRequestException);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('用户不存在时抛 404', async () => {
     stubFetch(async () => json({ message: 'Not Found' }, 404));
 
-    await expect(createService().fetchReadmes('me')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(createService().fetchReadmes('me')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
   it('读账号资料卡 + 公开仓库 README，跳过没有 README 的仓库', async () => {
@@ -235,6 +324,28 @@ describe('GithubReadmeService', () => {
     expect(bundle.text).toContain('Vue');
   });
 
+  it('同一个 README 被抓了两次（用户自己仓库 + 账号主页）时只留一份', async () => {
+    const readme = '## 关于我\n\n- 用 TypeScript 写后端，徽章墙见下。\n';
+
+    stubFetch(async (url) => {
+      if (url.endsWith('/users/me')) {
+        return json(userPayload());
+      }
+
+      if (url.includes('/users/me/repos')) {
+        return json([repoPayload('me'), repoPayload('readme')]);
+      }
+
+      return new Response(readme);
+    });
+
+    const bundle = await createService().fetchReadmes('me');
+
+    expect(bundle.repos).toHaveLength(1);
+    expect(bundle.text).toContain('### 仓库：me/me（账号主页自述 README）');
+    expect(bundle.text).not.toContain('### 仓库：me/readme');
+  });
+
   it('资料卡读不到（限流 / 抖动）不影响 README 分析', async () => {
     stubFetch(async (url) => {
       if (url.endsWith('/users/me')) {
@@ -256,7 +367,9 @@ describe('GithubReadmeService', () => {
   });
 
   it('过滤 fork，且未配置 GITHUB_TOKEN 时最多读 6 个仓库', async () => {
-    const repos = Array.from({ length: 9 }, (_, index) => repoPayload(`repo${index}`));
+    const repos = Array.from({ length: 9 }, (_, index) =>
+      repoPayload(`repo${index}`),
+    );
     repos.unshift(repoPayload('forked', { fork: true }));
 
     const fetchMock = stubFetch(async (url) => {
@@ -264,11 +377,15 @@ describe('GithubReadmeService', () => {
         return json(userPayload());
       }
 
-      return url.includes('/users/me/repos') ? json(repos) : new Response(`# ${url}`);
+      return url.includes('/users/me/repos')
+        ? json(repos)
+        : new Response(`# ${url}`);
     });
 
     const bundle = await createService().fetchReadmes('me');
-    const readmeCalls = fetchMock.mock.calls.filter(([url]) => url.endsWith('/readme'));
+    const readmeCalls = fetchMock.mock.calls.filter(([url]) =>
+      url.endsWith('/readme'),
+    );
 
     expect(bundle.totalRepos).toBe(GITHUB_MAX_REPOS_NO_TOKEN);
     expect(bundle.repos).toHaveLength(GITHUB_MAX_REPOS_NO_TOKEN);
@@ -291,14 +408,18 @@ describe('GithubReadmeService', () => {
       return json({ message: 'Not Found' }, 404);
     });
 
-    const bundle = await createService().fetchReadmes('https://github.com/me/alpha');
+    const bundle = await createService().fetchReadmes(
+      'https://github.com/me/alpha',
+    );
 
     expect(bundle.target.display).toBe('me/alpha');
     expect(bundle.repos.map((repo) => repo.fullName)).toEqual(['me/alpha']);
     // 仓库模式也要带上账号资料卡，但**不**去拉仓库列表
     expect(bundle.profile?.name).toBe('张三');
     expect(bundle.text).toContain('### 资料卡：me');
-    expect(fetchMock.mock.calls.every(([url]) => !url.includes('/users/me/repos'))).toBe(true);
+    expect(
+      fetchMock.mock.calls.every(([url]) => !url.includes('/users/me/repos')),
+    ).toBe(true);
   });
 
   it('额度用完时抛 503，交给前端降级', async () => {
@@ -322,7 +443,9 @@ describe('GithubReadmeService', () => {
         : json({ message: 'Not Found' }, 404),
     );
 
-    await expect(createService().fetchReadmes('me')).rejects.toBeInstanceOf(BadRequestException);
+    await expect(createService().fetchReadmes('me')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
   });
 
   it('token 无效（401）时自动退回未认证请求，不让整次录入失败', async () => {
@@ -339,33 +462,51 @@ describe('GithubReadmeService', () => {
           : json(userPayload());
       }
 
-      return url.includes('/users/me/repos') ? json([repoPayload('alpha')]) : new Response('# a');
+      return url.includes('/users/me/repos')
+        ? json([repoPayload('alpha')])
+        : new Response('# a');
     });
 
-    const bundle = await createService({ GITHUB_TOKEN: 'ghp_bad' }).fetchReadmes('me');
+    const bundle = await createService({
+      GITHUB_TOKEN: 'ghp_bad',
+    }).fetchReadmes('me');
 
     expect(bundle.profile?.login).toBe('me');
     // 资料卡与仓库列表是并发发的，两个都会先撞 401；之后同一次录入里的请求不再带 token
-    expect(authorizations.filter((value) => value === 'Bearer ghp_bad')).toHaveLength(2);
-    expect(authorizations.filter((value) => value !== undefined)).toHaveLength(2);
+    expect(
+      authorizations.filter((value) => value === 'Bearer ghp_bad'),
+    ).toHaveLength(2);
+    expect(authorizations.filter((value) => value !== undefined)).toHaveLength(
+      2,
+    );
   });
 
   it('token 带了引号或 Bearer 前缀也能用', async () => {
     const authorizations: Array<string | undefined> = [];
 
     stubFetch(async (url, init) => {
-      authorizations.push((init?.headers as Record<string, string> | undefined)?.['authorization']);
+      authorizations.push(
+        (init?.headers as Record<string, string> | undefined)?.[
+          'authorization'
+        ],
+      );
 
       if (url.endsWith('/users/me')) {
         return json(userPayload());
       }
 
-      return url.includes('/users/me/repos') ? json([repoPayload('alpha')]) : new Response('# a');
+      return url.includes('/users/me/repos')
+        ? json([repoPayload('alpha')])
+        : new Response('# a');
     });
 
-    await createService({ GITHUB_TOKEN: ' "Bearer ghp_ok" ' }).fetchReadmes('me');
+    await createService({ GITHUB_TOKEN: ' "Bearer ghp_ok" ' }).fetchReadmes(
+      'me',
+    );
 
-    expect(authorizations.every((value) => value === 'Bearer ghp_ok')).toBe(true);
+    expect(authorizations.every((value) => value === 'Bearer ghp_ok')).toBe(
+      true,
+    );
   });
 
   it('未配置 token 时遇到 401，给出可排查的提示', async () => {
@@ -377,7 +518,9 @@ describe('GithubReadmeService', () => {
   });
 
   it('配置了 GITHUB_TOKEN 时带上 Authorization，且上限放宽到 12 个', async () => {
-    const repos = Array.from({ length: 20 }, (_, index) => repoPayload(`repo${index}`));
+    const repos = Array.from({ length: 20 }, (_, index) =>
+      repoPayload(`repo${index}`),
+    );
     const authorizations: unknown[] = [];
 
     stubFetch(async (url, init) => {
@@ -398,12 +541,16 @@ describe('GithubReadmeService', () => {
       return new Response(`# ${url}`);
     });
 
-    const bundle = await createService({ GITHUB_TOKEN: 't0ken' }).fetchReadmes('me');
+    const bundle = await createService({ GITHUB_TOKEN: 't0ken' }).fetchReadmes(
+      'me',
+    );
 
     expect(bundle.repos).toHaveLength(12);
     expect(bundle.repos.map((repo) => repo.fullName)).toContain('me/repo11');
     expect(bundle.profile?.login).toBe('me');
     expect(authorizations.length).toBe(13);
-    expect(authorizations.every((value) => value === 'Bearer t0ken')).toBe(true);
+    expect(authorizations.every((value) => value === 'Bearer t0ken')).toBe(
+      true,
+    );
   });
 });

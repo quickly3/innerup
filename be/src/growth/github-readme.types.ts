@@ -44,6 +44,19 @@ export interface GithubUserProfile {
   joinedAt: string | null;
 }
 
+/**
+ * shields.io 静态徽章（`img.shields.io/badge/<内容>-<颜色>`）的解析结果。
+ *
+ * 这类「徽章墙」在 profile README 里就是一份手写的技术栈清单（见 `be/output/test.md`），
+ * 洗正文前先把它抽出来，别把技能名跟徽章一起扔掉。
+ */
+export interface ReadmeBadges {
+  /** `badge/<内容>-<颜色>` 里去掉颜色段后的技能名（已去重、保序） */
+  names: string[];
+  /** 形如 `license: MIT`、`npm: v1.0.0` 的「键: 值」徽章 */
+  pairs: string[];
+}
+
 /** GitHub `/users/:owner/repos`、`/repos/:owner/:repo` 响应里我们关心的字段。 */
 export interface GithubRepoPayload {
   full_name?: string;
@@ -65,6 +78,14 @@ export interface GithubRepoDoc {
   language: string | null;
   topics: string[];
   stars: number;
+  /**
+   * 从 README 徽章墙里抽出的技术名（`cleanReadme` 之后仍为纯文本，这里留一份结构化副本，
+   * 便于以后直接拿去建 skill，不用再从正文里正则捞）。
+   */
+  badges: {
+    names: string[];
+    pairs: string[];
+  };
   /** `cleanReadme` 之后并按 `GITHUB_MAX_README_CHARS` 截断的正文 */
   readme: string;
 }
